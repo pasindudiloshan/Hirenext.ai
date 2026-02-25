@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ job.job_title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/job_detail.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="job-detail-wrapper">
+
+    <!-- COVER IMAGE -->
+    {% if job.image_path %}
+    <div class="job-cover">
+        <img src="{{ url_for('static', filename=job.image_path) }}" alt="Job Image">
+        <div class="cover-overlay"></div>
+    </div>
+    {% endif %}
+
+    <div class="job-detail-card">
+
+        <!-- HEADER -->
+        <div class="job-header">
+            <div>
+                <h1>{{ job.job_title }}</h1>
+                <p class="job-meta-line">
+                    Created:
+                    {{ job.created_at.strftime('%d %b %Y') if job.created_at else "-" }}
+                </p>
+            </div>
+
+            <div class="status-pill {% if job.is_active %}active{% else %}inactive{% endif %}">
+                {% if job.is_active %}Active{% else %}Inactive{% endif %}
+            </div>
+        </div>
+
+        <!-- DESCRIPTION -->
+        <section class="detail-section">
+            <h3>Description</h3>
+            <p class="description-text">
+                {{ job.job_description }}
+            </p>
+        </section>
+
+        <!-- REQUIRED SKILLS -->
+        <section class="detail-section">
+            <h3>Required Skills</h3>
+
+            {% if job.required_skills %}
+            <div class="badge-group">
+                {% for s in job.required_skills %}
+                    <span class="skill-badge">{{ s }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
+                <p>No required skills provided.</p>
+            {% endif %}
+        </section>
+
+        <!-- PRIORITY KEYWORDS -->
+        <section class="detail-section">
+            <h3>Priority Keywords</h3>
+
+            {% if job.priority_keywords %}
+            <div class="badge-group">
+                {% for k in job.priority_keywords %}
+                    <span class="keyword-badge">{{ k }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
+                <p>No priority keywords provided.</p>
+            {% endif %}
+        </section>
+
+        <!-- AI CONFIG -->
+        <section class="detail-section">
+            <h3>AI Configuration</h3>
+            <p>
+                <strong>Shortlist Threshold:</strong>
+                {{ ((job.shortlist_threshold or 0) * 100)|int }}%
+            </p>
+        </section>
+
+        <!-- FOOTER -->
+        <div class="detail-footer">
+
+            <div class="meta">
+                Updated:
+                {{ job.updated_at.strftime('%d %b %Y %H:%M') if job.updated_at else "-" }}
+            </div>
+
+            <div class="actions">
+                <a class="btn-outline" href="{{ url_for('job_bp.list_jobs_page') }}">
+                    ← Back
+                </a>
+
+                <a class="btn-primary"
+                   href="{{ url_for('resume_bp.screening_form') }}?job_id={{ job._id }}">
+                    Start Screening
+                </a>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

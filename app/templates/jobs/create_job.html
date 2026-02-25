@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Create Job{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/create_job.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="create-job-container">
+
+    <!-- =============================
+         PAGE HEADER
+    ============================== -->
+    <div class="page-header">
+        <h1>Create New Job</h1>
+        <p>Configure job details and AI screening parameters.</p>
+    </div>
+
+    <!-- =============================
+         FLASH MESSAGES
+    ============================== -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-wrapper">
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- =============================
+         FORM START
+         ✅ IMPORTANT: enctype for image upload
+    ============================== -->
+    <form method="POST"
+          action="{{ url_for('job_bp.create_job_submit') }}"
+          class="job-form"
+          id="createJobForm"
+          enctype="multipart/form-data"
+          novalidate>
+
+        <!-- =============================
+             JOB INFORMATION SECTION
+        ============================== -->
+        <div class="form-section">
+            <h2>Job Information</h2>
+
+            <!-- Job Title -->
+            <div class="form-group">
+                <label for="job_title">Job Title</label>
+                <input type="text"
+                       id="job_title"
+                       name="job_title"
+                       required
+                       value="{{ request.form.job_title or '' }}"
+                       placeholder="e.g., HR Manager">
+            </div>
+
+            <!-- Job Description -->
+            <div class="form-group">
+                <label for="job_description">Job Description</label>
+                <textarea id="job_description"
+                          name="job_description"
+                          rows="8"
+                          required
+                          placeholder="Describe responsibilities, qualifications, expectations...">{{ request.form.job_description or '' }}</textarea>
+            </div>
+
+            <!-- ✅ Job Image Upload -->
+            <div class="form-group">
+                <label for="job_image">
+                    Job Vacancy Image (optional)
+                    <span class="tooltip"
+                          data-tooltip="Upload an image for this vacancy (png/jpg/jpeg/webp).">?</span>
+                </label>
+
+                <input type="file"
+                       id="job_image"
+                       name="job_image"
+                       accept="image/png,image/jpeg,image/webp">
+            </div>
+
+            <!-- Skills Datalist -->
+            <datalist id="skills_list">
+                {% for skill in skill_library %}
+                    <option value="{{ skill }}"></option>
+                {% endfor %}
+            </datalist>
+
+            <!-- Required Skills -->
+            <div class="form-group">
+                <label for="requiredSkills">
+                    Required Skills
+                    <span class="tooltip"
+                          data-tooltip="Separate multiple skills with commas. Example: Recruitment, HRIS, Payroll">?</span>
+                </label>
+
+                <input type="text"
+                       id="requiredSkills"
+                       name="required_skills"
+                       list="skills_list"
+                       required
+                       value="{{ request.form.required_skills or '' }}"
+                       placeholder="Recruitment, Onboarding, HRIS">
+
+                <div class="error-message" id="requiredSkillsError"></div>
+            </div>
+
+            <!-- Priority Keywords -->
+            <div class="form-group">
+                <label for="priorityKeywords">
+                    Priority Keywords
+                    <span class="tooltip"
+                          data-tooltip="Optional. Separate multiple keywords with commas.">?</span>
+                </label>
+
+                <input type="text"
+                       id="priorityKeywords"
+                       name="priority_keywords"
+                       list="skills_list"
+                       value="{{ request.form.priority_keywords or '' }}"
+                       placeholder="Workday, Compliance, Payroll">
+
+                <div class="error-message" id="priorityKeywordsError"></div>
+            </div>
+        </div>
+
+        <!-- =============================
+             AI SCORING SECTION
+        ============================== -->
+        <div class="form-section scoring-section">
+            <h2>AI Scoring Configuration</h2>
+
+            <div class="slider-container">
+                <div class="slider-header">
+                    <label for="thresholdSlider">
+                        Shortlist Threshold
+                        <span class="tooltip"
+                              data-tooltip="Minimum score required for a candidate to be shortlisted.">?</span>
+                    </label>
+                    <span id="thresholdValue">60%</span>
+                </div>
+
+                <input type="range"
+                       id="thresholdSlider"
+                       min="0"
+                       max="100"
+                       value="60"
+                       step="1"
+                       oninput="updateThreshold(this.value)">
+
+                <input type="hidden"
+                       name="shortlist_threshold"
+                       id="thresholdHidden"
+                       value="0.60">
+            </div>
+        </div>
+
+        <!-- =============================
+             ACTION BUTTONS
+        ============================== -->
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                Create Job
+            </button>
+
+            <a href="{{ url_for('job_bp.list_jobs_page') }}"
+               class="btn-secondary">
+                Cancel
+            </a>
+        </div>
+
+    </form>
+</div>
+
+<!-- =============================
+     JAVASCRIPT
+============================= -->
+<script>
+/* ------------------------------
+   SLIDER UPDATE
+------------------------------ */
+function updateThreshold(val) {
+    document.getElementById("thresholdValue").innerText = val + "%";
+    document.getElementById("thresholdHidden").value = (val / 100).toFixed(2);
+}
+updateThreshold(document.getElementById("thresholdSlider").value);
+
+
+/* ------------------------------
+   FRONTEND VALIDATION
+------------------------------ */
+document.getElementById("createJobForm").addEventListener("submit", function(e) {
+
+    let valid = true;
+
+    const requiredSkills = document.getElementById("requiredSkills");
+    const priorityKeywords = document.getElementById("priorityKeywords");
+
+    const requiredError = document.getElementById("requiredSkillsError");
+    const priorityError = document.getElementById("priorityKeywordsError");
+
+    requiredError.innerText = "";
+    priorityError.innerText = "";
+
+    function validateCommaField(field, errorElement, required = false) {
+
+        const value = field.value.trim();
+
+        if (required && value === "") {
+            errorElement.innerText = "This field is required.";
+            field.classList.add("input-error");
+            return false;
+        }
+
+        if (value === "") return true;
+
+        const items = value.split(",").map(v => v.trim()).filter(v => v);
+
+        field.classList.remove("input-error");
+        return true;
+    }
+
+    if (!validateCommaField(requiredSkills, requiredError, true)) {
+        valid = false;
+    }
+
+    if (!validateCommaField(priorityKeywords, priorityError, false)) {
+        valid = false;
+    }
+
+    if (!valid) {
+        e.preventDefault();
+    }
+});
+</script>
+
+{% endblock %}

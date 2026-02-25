@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Job Vacancies{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/list_jobs.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="jobs-container">
+
+    <!-- PAGE HEADER -->
+    <div class="jobs-header">
+        <h1>All Job Vacancies</h1>
+    </div>
+
+    <!-- SEARCH BAR -->
+    <div class="search-section">
+        <div class="search-input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text"
+                   id="jobSearch"
+                   placeholder="Search job title..."
+                   list="jobSuggestions">
+        </div>
+
+        <datalist id="jobSuggestions">
+            {% for job in jobs %}
+                <option value="{{ job.job_title }}"></option>
+            {% endfor %}
+        </datalist>
+    </div>
+
+    {% if jobs and jobs|length > 0 %}
+
+    <!-- GRID -->
+    <div class="jobs-grid" id="jobsGrid">
+
+        {% for job in jobs %}
+        <div class="job-card" data-title="{{ job.job_title | lower }}">
+
+            <!-- ✅ Job Image -->
+            {% if job.image_path %}
+                <div class="job-cover">
+                    <img src="{{ url_for('static', filename=job.image_path) }}"
+                         alt="Job Image">
+                </div>
+            {% else %}
+                <div class="job-cover placeholder">
+                    <div class="placeholder-text">No Image</div>
+                </div>
+            {% endif %}
+
+            <!-- Header -->
+            <div class="job-header">
+                <h3>{{ job.job_title }}</h3>
+                <span class="job-date">
+                    {{ job.created_at.strftime('%d %b %Y') if job.created_at else "-" }}
+                </span>
+            </div>
+
+            <!-- Skills -->
+            <div class="skills-section">
+                <p class="skills-label">Required Skills</p>
+                <div class="skills-wrapper">
+                    {% set skills = job.required_skills if job.required_skills else [] %}
+                    {% if skills|length > 0 %}
+                        {% for skill in skills[:3] %}
+                            <span class="skill-badge">{{ skill }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="skill-badge empty">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="job-actions">
+                <a href="{{ url_for('job_bp.view_job', job_id=job._id) }}" class="btn-outline">
+                    Details
+                </a>
+
+                <a href="{{ url_for('resume_bp.screening_form') }}?job_id={{ job._id }}"
+                   class="btn-primary">
+                    Start
+                </a>
+            </div>
+
+        </div>
+        {% endfor %}
+
+    </div>
+
+    {% else %}
+        <div class="empty-state">
+            <h3>No Job Vacancies Found</h3>
+        </div>
+    {% endif %}
+
+</div>
+
+<script>
+const searchInput = document.getElementById("jobSearch");
+const jobCards = document.querySelectorAll(".job-card");
+
+searchInput.addEventListener("keyup", function() {
+    const value = this.value.toLowerCase();
+
+    jobCards.forEach(card => {
+        const title = card.getAttribute("data-title");
+        card.style.display = title.includes(value) ? "block" : "none";
+    });
+});
+</script>
+
+{% endblock %}

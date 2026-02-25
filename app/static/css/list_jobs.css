@@ -1,0 +1,276 @@
+
+/* ===============================
+   HEADER
+================================= */
+
+.jobs-header h1 {
+    font-size: 30px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 25px;
+}
+
+/* ===============================
+   SEARCH SECTION
+================================= */
+
+.search-section {
+    margin-bottom: 35px;
+}
+
+.search-input-wrapper {
+    position: relative;
+    max-width: 6000px;
+}
+
+.search-input-wrapper input {
+    width: 100%;
+    padding: 14px 18px 14px 45px;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    font-size: 14px;
+    transition: all 0.25s ease;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+}
+
+.search-input-wrapper input:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 4px rgba(79,70,229,0.15);
+    outline: none;
+}
+
+.search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.5;
+}
+
+/* ===============================
+   GRID
+================================= */
+
+.jobs-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+}
+
+/* ===============================
+   CARD
+================================= */
+
+.job-card {
+    background: #ffffff;
+    padding: 26px;
+    border-radius: 20px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+
+.job-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.08);
+}
+
+/* ===============================
+   CARD HEADER
+================================= */
+
+.job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.job-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: #111827;
+}
+
+.job-date {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+/* ===============================
+   SKILLS SECTION
+================================= */
+
+.skills-section {
+    margin-top: 18px;
+}
+
+.skills-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+/* ===============================
+   MIXED COLOR SKILL BADGES
+================================= */
+
+.skills-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.skill-badge {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 999px;
+    transition: all 0.25s ease;
+    border: 1px solid transparent;
+}
+
+/* Color Variations (Auto Rotating) */
+.skill-badge:nth-child(6n+1) {
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    color: #4338ca;
+}
+
+.skill-badge:nth-child(6n+2) {
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    color: #065f46;
+}
+
+.skill-badge:nth-child(6n+3) {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+}
+
+.skill-badge:nth-child(6n+4) {
+    background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+    color: #9d174d;
+}
+
+.skill-badge:nth-child(6n+5) {
+    background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+    color: #075985;
+}
+
+.skill-badge:nth-child(6n+6) {
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    color: #5b21b6;
+}
+
+/* Hover Effect */
+.skill-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+}
+
+.skill-badge:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    color: #ffffff;
+    box-shadow: 0 6px 14px rgba(79,70,229,0.3);
+}
+
+.skill-badge.empty {
+    background: #f3f4f6;
+    color: #9ca3af;
+    border: 1px dashed #d1d5db;
+}
+
+/* ===============================
+   ACTION BUTTONS
+================================= */
+
+.job-actions {
+    margin-top: 22px;
+    display: flex;
+    gap: 12px;
+}
+
+.btn-primary {
+    padding: 9px 18px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: 0.25s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(79,70,229,0.35);
+}
+
+.btn-outline {
+    padding: 9px 18px;
+    border-radius: 10px;
+    border: 1px solid #4f46e5;
+    color: #4f46e5;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: 0.25s ease;
+}
+
+.btn-outline:hover {
+    background: #4f46e5;
+    color: white;
+}
+
+.job-cover{
+  width:100%;
+  height:140px;
+  border-radius:14px;
+  overflow:hidden;
+  margin-bottom:12px;
+  background:#0f172a;
+}
+.job-cover img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.job-cover.placeholder{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.placeholder-text{
+  color:#cbd5e1;
+  font-size:14px;
+  opacity:.9;
+}
+
+/* ===============================
+   EMPTY STATE
+================================= */
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6b7280;
+}
+
+/* ===============================
+   RESPONSIVE
+================================= */
+
+@media (max-width: 1024px) {
+    .jobs-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 650px) {
+    .jobs-grid {
+        grid-template-columns: 1fr;
+    }
+}
