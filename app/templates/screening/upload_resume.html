@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Resume Screening{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/screening.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<div class="screening-container">
+
+  <!-- PAGE HEADER -->
+  <div class="screening-header">
+    <div>
+      <h1>Resume Screening</h1>
+      <p>Upload and score multiple resumes instantly. Fully automated candidate detection.</p>
+    </div>
+  </div>
+
+  <!-- TOP SECTION -->
+  <div class="screening-top">
+
+    {% if not active_job %}
+
+      <!-- JOB SELECTION CARD -->
+      <div class="screening-card">
+        <form method="POST" action="/screening/select_job">
+
+          <div class="form-group">
+            <label>Select Job Role</label>
+            <select name="job_id" required>
+              <option value="">-- Select a Job --</option>
+              {% for job in jobs %}
+                <option value="{{ job._id }}">{{ job.job_title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button class="btn-primary" type="submit">
+            Start Screening
+          </button>
+
+        </form>
+      </div>
+
+    {% else %}
+
+      <!-- ACTIVE JOB + UPLOAD CARD -->
+      <div class="screening-card">
+
+        <div class="active-job-bar">
+          <div>
+            <span class="active-label">Active Job</span>
+            <h3>{{ active_job.job_title }}</h3>
+          </div>
+
+          <button class="btn-outline" type="button" onclick="resetSession()">
+            Reset
+          </button>
+        </div>
+
+        <form id="scoreForm" method="POST" enctype="multipart/form-data">
+
+          <div class="form-group">
+            <label>Upload Resume(s) (PDF)</label>
+            <input type="file"
+                   name="resume_pdf"
+                   accept="application/pdf"
+                   multiple
+                   required>
+            <small class="form-hint">
+              You can select multiple PDF files at once.
+            </small>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-primary" type="submit">
+              Score Resume(s)
+            </button>
+            <span id="scoreStatus" class="score-status"></span>
+          </div>
+
+        </form>
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+  <!-- SUMMARY STATS -->
+  <div class="summary-grid">
+
+    <div class="summary-card">
+      <span>Total Resumes</span>
+      <h2 id="totalCount">0</h2>
+    </div>
+
+    <div class="summary-card success">
+      <span>Shortlisted</span>
+      <h2 id="shortlistedCount">0</h2>
+    </div>
+
+    <div class="summary-card danger">
+      <span>Rejected</span>
+      <h2 id="rejectedCount">0</h2>
+    </div>
+
+  </div>
+
+  <!-- TABLE SECTION -->
+  <div class="table-card">
+    <table id="screeningTable">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Candidate</th>
+          <th>Score</th>
+          <th>Decision</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Dynamic rows -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SHORTLIST BUTTON -->
+  <div class="shortlist-section">
+    <button class="btn-primary large" onclick="submitShortlist()">
+      Shortlist Selected
+    </button>
+  </div>
+
+</div>
+
+
+<!-- ==========================================
+     GLOBAL LOADER OVERLAY
+========================================== -->
+<div id="globalLoader" class="global-loader">
+  <div class="spinner"></div>
+</div>
+
+
+<!-- ===============================
+     PARSED CV DETAILS MODAL
+================================= -->
+<div id="detailsModal" class="modal">
+  <div class="modal-box">
+
+    <div class="modal-header">
+      <h3>Candidate Details</h3>
+      <button class="modal-close" onclick="closeDetails()">✕</button>
+    </div>
+
+    <div id="modalTop" class="modal-meta"></div>
+    <div id="parsedContent" class="modal-content-body"></div>
+
+  </div>
+</div>
+
+
+<!-- ===============================
+     PDF PREVIEW MODAL
+================================= -->
+<div id="pdfModal" class="modal">
+  <div class="modal-box large">
+
+    <div class="modal-header">
+      <h3>Resume Preview</h3>
+      <button class="modal-close" onclick="closePDF()">✕</button>
+    </div>
+
+    <iframe id="pdfFrame"
+            style="width:100%; height:75vh;"
+            frameborder="0">
+    </iframe>
+
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/layout.js') }}"></script>
+{% endblock %}
