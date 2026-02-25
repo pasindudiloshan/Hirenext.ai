@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Interview Schedule{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>📅 Interview Schedule</h2>
+  <p>Select shortlisted candidates and set interview details.</p>
+
+  <form method="POST" action="/interview/schedule">
+
+    <h3>Shortlisted Candidates</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left; border-bottom:1px solid #ddd;">
+          <th style="padding:8px;">Select</th>
+          <th style="padding:8px;">Candidate</th>
+          <th style="padding:8px;">Job</th>
+          <th style="padding:8px;">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in shortlisted %}
+        <tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:8px;">
+            <input type="checkbox" name="screening_ids" value="{{ s._id }}">
+          </td>
+          <td style="padding:8px; font-weight:600;">{{ s.candidate_name }}</td>
+          <td style="padding:8px;">{{ s.job_title }}</td>
+          <td style="padding:8px;">{{ s.final_score_pct|default(0) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr>
+
+    <h3>Interview Details</h3>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div>
+        <label>Interview Date</label><br>
+        <input type="date" name="interview_date" required style="width:100%;">
+      </div>
+
+      <div>
+        <label>Interview Time</label><br>
+        <input type="time" name="interview_time" required style="width:100%;">
+      </div>
+
+      <div>
+        <label>Location / Link</label><br>
+        <input type="text" name="location" placeholder="Zoom link or office room" style="width:100%;">
+      </div>
+
+      <div>
+        <label>Interviewer</label><br>
+        <input type="text" name="interviewer" placeholder="e.g., HR Manager" style="width:100%;">
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <label>Notes</label><br>
+      <textarea name="notes" rows="3" style="width:100%;"></textarea>
+    </div>
+
+    <div style="margin-top:14px; display:flex; gap:10px;">
+      <button class="btn" type="submit">✅ Create Interview Schedule</button>
+      <a class="btn" href="/screening/new">⬅ Back</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
