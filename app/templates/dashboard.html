@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<!-- =======================
+     HERO BANNER
+======================= -->
+<section class="dashboard-banner">
+    <div class="banner-overlay">
+        <div class="banner-content">
+
+            <!-- Logo + Title -->
+            <div class="hero-logo">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HireNext Logo">
+                <h2>
+                    HireNext<span>.ai</span>
+                </h2>
+            </div>
+
+            <p>AI Powered Recruitment & Resume Screening Platform</p>
+
+            <a href="{{ url_for('job_bp.create_job_form') }}" class="banner-btn">
+                + Add Vacancy
+            </a>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- =======================
+     DASHBOARD CONTENT
+======================= -->
+<section class="dashboard-container">
+
+    <h2 class="section-title">Latest Job Vacancies</h2>
+
+    {% if jobs and jobs|length > 0 %}
+    
+    <div class="jobs-grid">
+
+        {% for job in jobs[:5] %}
+        <div class="job-card">
+
+            <!-- Job Header -->
+            <div class="job-header">
+                <h3>{{ job.job_title }}</h3>
+
+                <span class="job-date">
+                    {{ job.created_at.strftime('%d %b %Y') if job.created_at else '-' }}
+                </span>
+            </div>
+
+            <!-- REQUIRED SKILLS -->
+            <div class="priority-section">
+                <p class="priority-label">Required Skills</p>
+
+                <div class="job-keywords">
+                    {% set skills = job.required_skills if job.required_skills else [] %}
+
+                    {% if skills|length > 0 %}
+                        {% for skill in skills[:3] %}
+                            <span class="keyword-badge">
+                                {{ skill }}
+                            </span>
+                        {% endfor %}
+
+                        {% if skills|length < 3 %}
+                            {% for i in range(3 - skills|length) %}
+                                <span class="keyword-badge empty-badge">N/A</span>
+                            {% endfor %}
+                        {% endif %}
+                    {% else %}
+                        <span class="keyword-badge empty-badge">N/A</span>
+                        <span class="keyword-badge empty-badge">N/A</span>
+                        <span class="keyword-badge empty-badge">N/A</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="job-actions">
+                <a href="{{ url_for('job_bp.view_job', job_id=job._id) }}" class="btn-outline">
+                    Details
+                </a>
+
+                <a href="{{ url_for('resume_bp.screening_form') }}?job_id={{ job._id }}" class="btn-primary">
+                    Start Screening
+                </a>
+            </div>
+
+        </div>
+        {% endfor %}
+
+    </div>
+
+    <!-- VIEW ALL BUTTON -->
+    <div class="view-all-container">
+        <a href="{{ url_for('job_bp.list_jobs_page') }}" class="btn-primary view-all-btn-large">
+            View All Vacancies
+        </a>
+    </div>
+
+    {% else %}
+
+    <!-- EMPTY STATE -->
+    <div class="empty-state">
+        <h3>No Job Vacancies Yet</h3>
+        <p>Create your first job to activate AI-powered screening.</p>
+
+        <a href="{{ url_for('job_bp.create_job_form') }}" class="btn-primary">
+            + Create First Job
+        </a>
+    </div>
+
+    {% endif %}
+
+</section>
+
+{% endblock %}
