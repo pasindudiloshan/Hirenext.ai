@@ -1,72 +1,282 @@
+{# templates/interview/schedule.html
+   ✅ CLEANED + ALIGNED with final interview_schedule.js / controller / css
+
+   Changes (for mail popup):
+   - ✈ Send Emails now opens a small popup window (mail.html) instead of posting API.
+   - Added openMailPopup() in extra_js BEFORE interview_schedule.js loads.
+#}
+
 {% extends "base.html" %}
-{% block title %}Interview Schedule{% endblock %}
+{% block title %}Interview Scheduling{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/interview_schedule.css') }}">
+{% endblock %}
 
 {% block content %}
-<div class="card">
-  <h2>📅 Interview Schedule</h2>
-  <p>Select shortlisted candidates and set interview details.</p>
+<div class="is-wrap">
 
-  <form method="POST" action="/interview/schedule">
+  <!-- ================= LEFT COLUMN : JOB VACANCIES ================= -->
+  <aside class="is-left">
+    <div class="is-left-head">
+      <h3>Job Vacancies</h3>
+    </div>
 
-    <h3>Shortlisted Candidates</h3>
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="text-align:left; border-bottom:1px solid #ddd;">
-          <th style="padding:8px;">Select</th>
-          <th style="padding:8px;">Candidate</th>
-          <th style="padding:8px;">Job</th>
-          <th style="padding:8px;">Score</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in shortlisted %}
-        <tr style="border-bottom:1px solid #f0f0f0;">
-          <td style="padding:8px;">
-            <input type="checkbox" name="screening_ids" value="{{ s._id }}">
-          </td>
-          <td style="padding:8px; font-weight:600;">{{ s.candidate_name }}</td>
-          <td style="padding:8px;">{{ s.job_title }}</td>
-          <td style="padding:8px;">{{ s.final_score_pct|default(0) }}%</td>
-        </tr>
+    <div class="vacancy-list">
+      {% if batches and batches|length > 0 %}
+        {% set active_id = (active_batch.get('_id') if active_batch else '') %}
+
+        {% for b in batches %}
+          {% set b_id = b.get('_id', '') %}
+          {% set is_active = (active_id|string == b_id|string) %}
+
+          <button
+            class="vacancy-card {{ 'active' if is_active else '' }}"
+            type="button"
+            data-batch-id="{{ b_id }}"
+            onclick="window.location.href='{{ url_for('interview_bp.schedule_page') }}?batch_id={{ b_id }}'">
+
+            <div class="vc-top">
+              <div class="vc-title">
+                <span class="dot {{ 'dot-green' if is_active else 'dot-gray' }}"></span>
+                <span class="vc-name">{{ b.get('job_title') or 'Vacancy' }}</span>
+              </div>
+
+              <span class="pill {{ 'pill-active' if is_active else 'pill-muted' }}">
+                {{ 'Active' if is_active else (b.get('status') or 'Batch') }}
+              </span>
+            </div>
+
+            <div class="vc-meta">
+              <div class="vc-row">
+                <span class="k">Shortlisted:</span>
+                <span class="v">
+                  {{ b.get('shortlisted_count')
+                     if b.get('shortlisted_count') is not none
+                     else ((b.get('shortlisted_candidates')|length) if b.get('shortlisted_candidates') else 0) }}
+                </span>
+              </div>
+
+              <div class="vc-row">
+                <span class="k">Interviews:</span>
+                <span class="v">
+                  {% if b.get('interviews_scheduled') is not none and b.get('shortlisted_count') is not none %}
+                    {{ b.get('interviews_scheduled') }}/{{ b.get('shortlisted_count') }}
+                  {% else %}
+                    {{ b.get('interviews_scheduled') or '-' }}
+                  {% endif %}
+                </span>
+              </div>
+
+              <div class="vc-row">
+                <span class="k">Scheduled Date:</span>
+                <span class="v">{{ b.get('last_scheduled_date') or b.get('scheduled_date') or '-' }}</span>
+              </div>
+            </div>
+          </button>
         {% endfor %}
-      </tbody>
-    </table>
 
-    <hr>
-
-    <h3>Interview Details</h3>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-      <div>
-        <label>Interview Date</label><br>
-        <input type="date" name="interview_date" required style="width:100%;">
-      </div>
-
-      <div>
-        <label>Interview Time</label><br>
-        <input type="time" name="interview_time" required style="width:100%;">
-      </div>
-
-      <div>
-        <label>Location / Link</label><br>
-        <input type="text" name="location" placeholder="Zoom link or office room" style="width:100%;">
-      </div>
-
-      <div>
-        <label>Interviewer</label><br>
-        <input type="text" name="interviewer" placeholder="e.g., HR Manager" style="width:100%;">
-      </div>
+      {% else %}
+        <div class="is-empty">
+          <h4>No batches yet</h4>
+          <p>Shortlist candidates first to start scheduling.</p>
+          <a class="btn btn-primary" href="{{ url_for('resume_bp.screening_form') }}">Go to Screening</a>
+        </div>
+      {% endif %}
     </div>
 
-    <div style="margin-top:14px;">
-      <label>Notes</label><br>
-      <textarea name="notes" rows="3" style="width:100%;"></textarea>
-    </div>
+    <a class="btn btn-primary is-left-btn" href="{{ url_for('job_bp.list_jobs_page') }}">View All Jobs</a>
+  </aside>
 
-    <div style="margin-top:14px; display:flex; gap:10px;">
-      <button class="btn" type="submit">✅ Create Interview Schedule</button>
-      <a class="btn" href="/screening/new">⬅ Back</a>
+  <!-- ================= CENTER COLUMN : CALENDAR + ACTIONS ================= -->
+  <section class="is-center">
+
+    <header class="is-titlebar">
+      <div class="is-title">
+        <div class="crumb">»</div>
+        <div>
+          <h1>Interview Scheduling</h1>
+          <p>Select Date, Assign Slots &amp; Send Meeting Links</p>
+        </div>
+      </div>
+
+      <div class="is-controls">
+        <div class="chip-select">
+          <span class="chip-ico">🌐</span>
+          <select id="tzSelect">
+            <option value="Asia/Colombo" selected>GMT +05:30 (Asia/Colombo)</option>
+            <option value="Asia/Kolkata">GMT +05:30 (Asia/Kolkata)</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+
+        <div class="chip-select">
+          <span class="chip-ico">⏱</span>
+          <select id="durationSelect">
+            <option value="10" selected>10 Min</option>
+            <option value="15">15 Min</option>
+            <option value="20">20 Min</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <div class="is-center-card">
+
+      <!-- top summary row -->
+      <div class="is-summary">
+        <div class="sum-left">
+          <div class="sum-ico">📅</div>
+          <div class="sum-text">
+            <div class="sum-label">Total Shortlisted:</div>
+            <div class="sum-value">
+              <span id="totalShortlisted">
+                {{ total_shortlisted or (shortlisted_candidates|length if shortlisted_candidates else 0) }}
+              </span>
+              <span class="muted">Candidates</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sum-right">
+          <div class="vacancy-pill">
+            <div class="vp-top">Vacancy Name:</div>
+            <div class="vp-name">
+              <span class="dot dot-green"></span>
+              <span id="activeVacancyName">{{ active_batch.get('job_title') if active_batch else '—' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- calendar -->
+      <div class="is-cal">
+        <div class="is-cal-head">
+          <button class="cal-nav" id="calPrev" type="button" aria-label="Previous Month">‹</button>
+          <div class="cal-month" id="calMonth">—</div>
+          <button class="cal-nav" id="calNext" type="button" aria-label="Next Month">›</button>
+        </div>
+
+        <div class="is-cal-week">
+          <div class="wk sun">Sun</div>
+          <div class="wk">Mon</div>
+          <div class="wk">Tue</div>
+          <div class="wk">Wed</div>
+          <div class="wk">Thu</div>
+          <div class="wk">Fri</div>
+          <div class="wk">Sat</div>
+        </div>
+
+        <div class="is-cal-grid" id="calendarGrid"></div>
+      </div>
+
+      <!-- action buttons row -->
+      <div class="is-cta-row">
+        <button class="btn btn-ghost" id="meetingLinkBtn" type="button">🔗 Meeting Link</button>
+        <button class="btn btn-success" id="confirmSlotsBtn" type="button">✓ Confirm Slots</button>
+
+        {# ✅ UPDATED: open popup mail.html #}
+        <button class="btn btn-primary" id="sendEmailsBtn" type="button" onclick="openMailPopup()">
+          ✈ Send Emails
+        </button>
+      </div>
+
     </div>
-  </form>
+  </section>
+
+  <!-- ================= RIGHT COLUMN : AVAILABLE TIME SLOTS ================= -->
+  <aside class="is-right">
+    <div class="is-right-card">
+
+      <div class="slots-head">
+        <h3>Available Time Slots</h3>
+
+        <div class="slots-date">
+          <button class="cal-nav small" id="dayPrev" type="button" aria-label="Previous Day">‹</button>
+          <div class="slots-day" id="slotsDayLabel">
+            {{ selected_date_label or 'Select a Date' }}
+          </div>
+          <button class="cal-nav small" id="dayNext" type="button" aria-label="Next Day">›</button>
+        </div>
+      </div>
+
+      <div class="slots-list" id="slotsList">
+        <div class="slot-skeleton">Select a date to load slots</div>
+      </div>
+
+      <div class="slots-legend">
+        <div class="lg"><span class="lg-dot dot-green"></span> Available</div>
+        <div class="lg"><span class="lg-dot dot-orange"></span> Selected</div>
+        <div class="lg"><span class="lg-dot dot-gray"></span> Booked</div>
+      </div>
+
+    </div>
+  </aside>
+
 </div>
+
+{# ============================================================
+   ✅ Meeting Link Preview Modal (used by interview_schedule.js)
+   ============================================================ #}
+<div id="hnMeetingModal" class="hn-mm" aria-hidden="true">
+  <div class="hn-mm-backdrop" data-close="1"></div>
+
+  <div class="hn-mm-card" role="dialog" aria-modal="true" aria-label="Meeting Links">
+    <div class="hn-mm-head">
+      <div>
+        <div class="hn-mm-title">Meeting Links</div>
+        <div class="hn-mm-sub">Candidate slot time + link (copy per candidate)</div>
+      </div>
+      <button class="hn-mm-x" type="button" data-close="1" aria-label="Close">✕</button>
+    </div>
+
+    <div class="hn-mm-body">
+      <div class="hn-mm-meta" id="hnMmMeta"></div>
+      <div class="hn-mm-table" id="hnMmTable"></div>
+    </div>
+
+    <div class="hn-mm-foot">
+      <button class="hn-mm-btn" type="button" id="hnMmCopyAll">Copy All</button>
+      <button class="hn-mm-btn primary" type="button" data-close="1">Done</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // ✅ Must be defined BEFORE interview_schedule.js loads
+  window.__SCHEDULE_CTX__ = {
+    activeBatch: {{ (active_batch or {}) | tojson }},
+    shortlistedCandidates: {{ (shortlisted_candidates or []) | tojson }},
+    batches: {{ (batches or []) | tojson }},
+    recentInterviews: {{ (recent_interviews or []) | tojson }},
+    meetingLink: {{ (meeting_link or '') | tojson }},
+    selectedDate: {{ (selected_date_iso or '') | tojson }}
+  };
+
+  // ✅ Popup opener (small window)
+  function openMailPopup() {
+    const ctx = window.__SCHEDULE_CTX__ || {};
+    const dateISO = (ctx.selectedDate || "").trim();
+
+    if (!dateISO) {
+      alert("Please select a date first.");
+      return;
+    }
+
+    const link = (ctx.meetingLink || "").trim();
+    const url =
+      `/interview/mail?date=${encodeURIComponent(dateISO)}&link=${encodeURIComponent(link)}`;
+
+    window.open(
+      url,
+      "HireNextMailPopup",
+      "width=520,height=420,left=250,top=150,resizable=yes,scrollbars=yes"
+    );
+  }
+</script>
+
+<script defer src="{{ url_for('static', filename='js/interview_schedule.js') }}"></script>
 {% endblock %}

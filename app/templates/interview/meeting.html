@@ -1,0 +1,168 @@
+{# app/templates/interview/meeting.html #}
+{% extends "base.html" %}
+{% block title %}Meeting{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/meeting.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="mt-page">
+  <section class="mt-hero">
+    <div class="mt-hero-left">
+      <h1>Meeting Details</h1>
+      <p class="mt-sub">View and modify a scheduled interview.</p>
+    </div>
+
+    <div class="mt-hero-right">
+      <a class="mt-btn mt-btn-outline" href="/interview/calander">← Back to Calendar</a>
+      <button class="mt-btn mt-btn-danger" id="btnCancel" type="button">Cancel Interview</button>
+    </div>
+  </section>
+
+  <section class="mt-card">
+    <div class="mt-topbar">
+      <div class="mt-pill" id="statusPill">Loading...</div>
+      <div class="mt-mini" id="metaLine"></div>
+    </div>
+
+    <div class="mt-grid">
+      <!-- Left: Main form -->
+      <div class="mt-panel">
+        <h2 class="mt-h2">Edit</h2>
+
+        <form id="meetingForm" class="mt-form" novalidate>
+          <input type="hidden" id="interviewId" value="{{ interview_id }}">
+
+          <div class="mt-row">
+            <label class="mt-label">
+              Title
+              <input class="mt-input" id="title" name="title" placeholder="Interview title">
+            </label>
+
+            <label class="mt-label">
+              Type
+              <select class="mt-input" id="type" name="type">
+                <option value="Interview">Interview</option>
+                <option value="Phone">Phone</option>
+                <option value="Video">Video</option>
+                <option value="Meeting">Meeting</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="mt-row">
+            <label class="mt-label">
+              Date
+              <input class="mt-input" type="date" id="date" name="date" required>
+            </label>
+
+            <label class="mt-label">
+              Time
+              <input class="mt-input" type="time" id="time" name="time" required>
+            </label>
+          </div>
+
+          <div class="mt-row">
+            <label class="mt-label">
+              Duration (mins)
+              <input class="mt-input" type="number" id="duration" name="duration" min="5" step="5" value="30">
+            </label>
+
+            <label class="mt-label">
+              Status
+              <select class="mt-input" id="status" name="status">
+                <option value="SCHEDULED">SCHEDULED</option>
+                <option value="CONFIRMED">CONFIRMED</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="NO_SHOW">NO_SHOW</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="mt-label">
+            Meeting Link
+            <input class="mt-input" id="meeting_link" name="meeting_link" placeholder="https://meet.google.com/...">
+          </label>
+
+          <label class="mt-label">
+            Notes
+            <textarea class="mt-textarea" id="notes" name="notes" rows="4"
+                      placeholder="Add notes (candidate, instructions, etc.)"></textarea>
+          </label>
+
+          <div class="mt-actions">
+            <button class="mt-btn mt-btn-primary" id="btnSave" type="submit">
+              Save Changes
+            </button>
+            <button class="mt-btn mt-btn-outline" id="btnReload" type="button">
+              Reload
+            </button>
+          </div>
+
+          <div class="mt-alert" id="formAlert" style="display:none;"></div>
+        </form>
+      </div>
+
+      <!-- Right: Read-only details -->
+      <div class="mt-panel mt-panel-right">
+        <h2 class="mt-h2">Details</h2>
+
+        <div class="mt-kv">
+          <div class="mt-k">Candidate</div>
+          <div class="mt-v" id="candName">-</div>
+        </div>
+
+        <div class="mt-kv">
+          <div class="mt-k">Email</div>
+          <div class="mt-v">
+            <a id="candEmail" href="#" target="_blank" rel="noopener">-</a>
+          </div>
+        </div>
+
+        <div class="mt-kv">
+          <div class="mt-k">Job</div>
+          <div class="mt-v" id="jobTitle">-</div>
+        </div>
+
+        <div class="mt-kv">
+          <div class="mt-k">Batch ID</div>
+          <div class="mt-v mono" id="batchId">-</div>
+        </div>
+
+        <div class="mt-kv">
+          <div class="mt-k">Timezone</div>
+          <div class="mt-v" id="tz">-</div>
+        </div>
+
+        <div class="mt-divider"></div>
+
+        <div class="mt-kv">
+          <div class="mt-k">Start</div>
+          <div class="mt-v mono" id="startTime">-</div>
+        </div>
+
+        <div class="mt-kv">
+          <div class="mt-k">End</div>
+          <div class="mt-v mono" id="endTime">-</div>
+        </div>
+
+        <div class="mt-mini mt-hint">
+          Tip: Changing date/time/duration will auto-recompute start/end times on save.
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  window.__MEETING__ = {
+    interviewId: {{ interview_id | tojson }}
+  };
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='js/meeting.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,178 @@
+{# app/templates/interview/calander.html #}
+{% extends "base.html" %}
+{% block title %}Calendar{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/calander.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="sf-cal-page">
+
+  <section class="sf-cal-hero">
+    <div class="sf-cal-hero-left">
+      <h1>Calendar</h1>
+    </div>
+
+    <div class="sf-cal-hero-right">
+      <button class="sf-btn sf-btn-primary" id="btnAddSchedule" type="button">
+        <span class="sf-ico">📅</span>
+        Add Schedule
+      </button>
+    </div>
+  </section>
+
+  <section class="sf-cal-card">
+
+    <div class="sf-cal-controls">
+      <div class="sf-cal-controls-left">
+        <div class="sf-nav">
+          <button class="sf-btn sf-btn-outline sf-square" id="btnPrev" type="button" aria-label="Previous">‹</button>
+          <button class="sf-btn sf-btn-outline sf-square" id="btnNext" type="button" aria-label="Next">›</button>
+        </div>
+
+        <button class="sf-btn sf-btn-outline" id="btnToday" type="button">Today</button>
+      </div>
+
+      <div class="sf-cal-controls-center">
+        <div class="sf-cal-title" id="calTitle"></div>
+      </div>
+
+      <div class="sf-cal-controls-right">
+        <div class="sf-seg" role="tablist" aria-label="Calendar View">
+          <button class="sf-seg-btn active" id="viewMonth" type="button" data-view="month">Month</button>
+          <button class="sf-seg-btn" id="viewWeek" type="button" data-view="week">Week</button>
+          <button class="sf-seg-btn" id="viewDay" type="button" data-view="day">Day</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sf-cal-weekdays" id="weekdaysRow">
+      <div class="wd">Sun</div>
+      <div class="wd">Mon</div>
+      <div class="wd">Tue</div>
+      <div class="wd">Wed</div>
+      <div class="wd">Thu</div>
+      <div class="wd">Fri</div>
+      <div class="wd">Sat</div>
+    </div>
+
+    <div class="sf-cal-grid" id="calGrid"></div>
+  </section>
+
+  <!-- =========================================================
+       ADD SCHEDULE MODAL (Existing)
+  ========================================================== -->
+  <div class="sf-modal" id="scheduleModal" aria-hidden="true">
+    <div class="sf-modal-backdrop" data-close="1"></div>
+
+    <div class="sf-modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="sf-modal-head">
+        <div>
+          <h3 id="modalTitle">Add Schedule</h3>
+          <p>Create a calendar entry for interviews/meetings.</p>
+        </div>
+        <button class="sf-btn sf-btn-outline sf-square" data-close="1" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <form class="sf-form" id="scheduleForm">
+        <div class="sf-form-row">
+          <label class="sf-label">
+            Title
+            <input class="sf-input" name="title" id="evTitle" placeholder="e.g., 10a Phone interview" required>
+          </label>
+
+          <label class="sf-label">
+            Type
+            <select class="sf-input" name="type" id="evType">
+              <option value="Interview" selected>Interview</option>
+              <option value="Phone">Phone</option>
+              <option value="Video">Video</option>
+              <option value="Meeting">Meeting</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="sf-form-row">
+          <label class="sf-label">
+            Date
+            <input class="sf-input" type="date" name="date" id="evDate" required>
+          </label>
+
+          <label class="sf-label">
+            Time
+            <input class="sf-input" type="time" name="time" id="evTime" required>
+          </label>
+        </div>
+
+        <div class="sf-form-row">
+          <label class="sf-label">
+            Duration (mins)
+            <input class="sf-input" type="number" name="duration" id="evDuration" min="5" step="5" value="30">
+          </label>
+
+          <label class="sf-label">
+            Notes (optional)
+            <input class="sf-input" name="notes" id="evNotes" placeholder="Candidate name / batch / link...">
+          </label>
+        </div>
+
+        <div class="sf-modal-actions">
+          <button class="sf-btn sf-btn-outline" data-close="1" type="button">Cancel</button>
+          <button class="sf-btn sf-btn-primary" type="submit">Save</button>
+        </div>
+
+        <div class="sf-mini-hint">
+          Saved locally in this browser.
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       ✅ DAY DETAILS MODAL (NEW)
+       Click a date → show all interviews for that day
+  ========================================================== -->
+  <div class="sf-modal" id="dayDetailsModal" aria-hidden="true">
+    <div class="sf-modal-backdrop" data-close-day="1"></div>
+
+    <div class="sf-modal-card" role="dialog" aria-modal="true" aria-labelledby="dayDetailsTitle">
+      <div class="sf-modal-head">
+        <div>
+          <h3 id="dayDetailsTitle">Interviews</h3>
+          <p id="dayDetailsSubtitle">Selected date</p>
+        </div>
+        <button class="sf-btn sf-btn-outline sf-square" data-close-day="1" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="sf-day-details-body">
+        <div id="dayDetailsList" class="sf-day-details-list">
+          <!-- JS will render rows -->
+        </div>
+
+        <div id="dayDetailsEmpty" class="sf-day-empty" style="display:none;">
+          No interviews available.
+        </div>
+      </div>
+
+      <div class="sf-modal-actions">
+        <button class="sf-btn sf-btn-outline" data-close-day="1" type="button">Close</button>
+      </div>
+
+      <div class="sf-mini-hint">
+        Tip: Click an interview row to open Meeting page and modify.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Backend interviews (Mongo → JSON safe)
+  window.__CAL_EVENTS__ = {{ interviews | default([], true) | tojson }};
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='js/calander.js') }}"></script>
+{% endblock %}

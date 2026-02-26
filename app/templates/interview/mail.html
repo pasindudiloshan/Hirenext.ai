@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Send Email</title>
+
+  <!-- ✅ Reuse your schedule styling -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/interview_schedule.css') }}">
+</head>
+
+<body class="mail-page">
+
+  <div class="mail-card">
+
+    <div class="mail-head">
+      <h1 class="mail-title">Send Interview Email</h1>
+      <p class="mail-sub">
+        Meeting Date: <strong>{{ meeting_date or "-" }}</strong>
+      </p>
+    </div>
+
+    <div class="mail-body">
+
+      {% if message %}
+        <div class="mail-alert success">{{ message }}</div>
+      {% endif %}
+      {% if error %}
+        <div class="mail-alert error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('interview_bp.send_manual_email') }}">
+        <input type="hidden" name="meeting_date" value="{{ meeting_date or '' }}">
+
+        <div class="mail-group">
+          <label class="mail-label">Candidate Email</label>
+          <input class="mail-input"
+                 type="email"
+                 name="to_email"
+                 required
+                 value="{{ to_email or '' }}"
+                 placeholder="candidate@example.com">
+        </div>
+
+        <div class="mail-group">
+          <label class="mail-label">Meeting Link</label>
+          <input class="mail-input"
+                 type="url"
+                 name="meeting_link"
+                 required
+                 value="{{ meeting_link or '' }}"
+                 placeholder="https://meet.google.com/...">
+        </div>
+
+        <div class="mail-actions">
+          <button type="button" class="mail-btn" onclick="window.close()">Cancel</button>
+          <button type="submit" class="mail-btn primary">Send Email</button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+</body>
+</html>
