@@ -14,10 +14,10 @@
 
 <!-- =======================
      TOP NAVBAR
-======================= -->
+======================== -->
 <header class="topbar">
     <div class="topbar-left">
-        <button id="toggleSidebar" class="menu-btn">☰</button>
+        <button id="toggleSidebar" class="menu-btn" type="button" aria-label="Toggle Sidebar">☰</button>
 
         <div class="logo">
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HireNext Logo">
@@ -28,10 +28,26 @@
     </div>
 
     <nav class="topbar-nav">
-        <a href="/" class="nav-link">Dashboard</a>
-        <a href="/jobs/" class="nav-link">Jobs</a>
-        <a href="/screening/new" class="nav-link">Screening</a>
-        <a href="/interview/schedule" class="nav-link">Interviews</a>
+        <a href="/"
+           class="nav-link {% if request.path == '/' %}active{% endif %}">
+            Dashboard
+        </a>
+
+        <a href="/jobs/"
+           class="nav-link {% if request.path.startswith('/jobs') %}active{% endif %}">
+            Jobs
+        </a>
+
+        <a href="/screening/new"
+           class="nav-link {% if request.path.startswith('/screening') %}active{% endif %}">
+            Screening
+        </a>
+
+        <!-- ✅ Calendar -->
+        <a href="/interview/calander"
+           class="nav-link {% if request.path.startswith('/interview/calander') %}active{% endif %}">
+            Calendar
+        </a>
     </nav>
 
     <div class="topbar-right">
@@ -42,17 +58,47 @@
 
 <!-- =======================
      SIDEBAR
-======================= -->
+======================== -->
 <aside id="sidebar" class="sidebar">
 
     <div class="sidebar-top">
         <h3 class="sidebar-title">Navigation</h3>
 
         <ul class="sidebar-links">
-            <li><a href="/" class="sidebar-link">Dashboard</a></li>
-            <li><a href="/jobs/" class="sidebar-link">Jobs</a></li>
-            <li><a href="/screening/new" class="sidebar-link">Resume Screening</a></li>
-            <li><a href="/interview/schedule" class="sidebar-link">Interviews</a></li>
+            <li>
+                <a href="/"
+                   class="sidebar-link {% if request.path == '/' %}active{% endif %}">
+                    Dashboard
+                </a>
+            </li>
+
+            <li>
+                <a href="/jobs/"
+                   class="sidebar-link {% if request.path.startswith('/jobs') %}active{% endif %}">
+                    Jobs
+                </a>
+            </li>
+
+            <li>
+                <a href="/screening/new"
+                   class="sidebar-link {% if request.path.startswith('/screening') %}active{% endif %}">
+                    Resume Screening
+                </a>
+            </li>
+
+            <li>
+                <a href="/interview/calander"
+                   class="sidebar-link {% if request.path.startswith('/interview/calander') %}active{% endif %}">
+                    Calendar
+                </a>
+            </li>
+
+            <li>
+                <a href="/interview/schedule"
+                   class="sidebar-link {% if request.path.startswith('/interview/schedule') %}active{% endif %}">
+                    Interview Scheduling
+                </a>
+            </li>
         </ul>
     </div>
 
@@ -73,7 +119,7 @@
 
 <!-- =======================
      MAIN CONTENT
-======================= -->
+======================== -->
 <main id="mainContent" class="main-content">
     {% block content %}{% endblock %}
 </main>
@@ -81,9 +127,8 @@
 
 <!-- =======================
      FOOTER
-======================= -->
+======================== -->
 <footer id="footer" class="footer">
-
     <div class="footer-container">
 
         <div class="footer-col">
@@ -105,6 +150,7 @@
                 <li><a href="/">Dashboard</a></li>
                 <li><a href="/jobs/">Job Management</a></li>
                 <li><a href="/screening/new">Resume Screening</a></li>
+                <li><a href="/interview/calander">Calendar</a></li>
                 <li><a href="/interview/schedule">Interview Scheduling</a></li>
             </ul>
         </div>
@@ -142,29 +188,10 @@
             <a href="#">GitHub</a>
         </div>
     </div>
-
 </footer>
 
-
-<!-- =======================
-     SIDEBAR TOGGLE SCRIPT
-======================= -->
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-
-    const toggleBtn = document.getElementById("toggleSidebar");
-    const sidebar = document.getElementById("sidebar");
-    const mainContent = document.getElementById("mainContent");
-    const footer = document.getElementById("footer");
-
-    toggleBtn.addEventListener("click", function () {
-        sidebar.classList.toggle("active");
-        mainContent.classList.toggle("shifted");
-        footer.classList.toggle("shifted");
-    });
-
-});
-</script>
+<!-- ✅ ONE global layout script for sidebar toggle (no inline script anymore) -->
+<script defer src="{{ url_for('static', filename='js/layout.js') }}"></script>
 
 {% block extra_js %}{% endblock %}
 

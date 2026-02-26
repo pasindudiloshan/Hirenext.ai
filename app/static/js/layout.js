@@ -1,20 +1,22 @@
 /* ===============================
-   Sidebar Toggle
+   GLOBAL: Sidebar Toggle (Unified)
+   - Uses: .sidebar.active + .main-content.shifted + .footer.shifted
 ================================= */
 document.addEventListener("DOMContentLoaded", function () {
+  const toggleBtn = document.getElementById("toggleSidebar");
+  const sidebar = document.getElementById("sidebar");
+  const mainContent = document.getElementById("mainContent");
+  const footer = document.getElementById("footer");
 
-    const toggleBtn = document.getElementById("toggleSidebar");
-    const sidebar = document.getElementById("sidebar");
-    const mainContent = document.getElementById("mainContent");
-
-    if (toggleBtn) {
-        toggleBtn.addEventListener("click", function () {
-            sidebar.classList.toggle("hidden");
-            mainContent.classList.toggle("full");
-        });
-    }
-
+  if (toggleBtn && sidebar && mainContent) {
+    toggleBtn.addEventListener("click", function () {
+      sidebar.classList.toggle("active");
+      mainContent.classList.toggle("shifted");
+      if (footer) footer.classList.toggle("shifted");
+    });
+  }
 });
+
 
 /* ===============================
    Resume Screening Logic
@@ -22,10 +24,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
 const SCREENINGS_MAP = {};
 
+
 /* ===============================
    GLOBAL LOADER
 ================================= */
-
 function showLoader() {
   const loader = document.getElementById("globalLoader");
   if (loader) loader.classList.add("active");
@@ -36,42 +38,45 @@ function hideLoader() {
   if (loader) loader.classList.remove("active");
 }
 
+
 /* ===============================
    Update Dashboard Stats
 ================================= */
 function updateStats() {
-
   const rows = Object.values(SCREENINGS_MAP);
 
-  document.getElementById("totalCount").innerText = rows.length;
-  document.getElementById("shortlistedCount").innerText =
-    rows.filter(r => r.decision === "SHORTLIST").length;
-  document.getElementById("rejectedCount").innerText =
-    rows.filter(r => r.decision === "REJECT").length;
+  const totalEl = document.getElementById("totalCount");
+  const shortEl = document.getElementById("shortlistedCount");
+  const rejectEl = document.getElementById("rejectedCount");
+
+  if (totalEl) totalEl.innerText = rows.length;
+  if (shortEl) shortEl.innerText = rows.filter(r => r.decision === "SHORTLIST").length;
+  if (rejectEl) rejectEl.innerText = rows.filter(r => r.decision === "REJECT").length;
 }
+
 
 /* ===============================
    Render Table (Auto Sort High → Low)
 ================================= */
 function renderTable() {
-
   const tbody = document.querySelector("#screeningTable tbody");
   if (!tbody) return;
 
   tbody.innerHTML = "";
 
   const sortedRows = Object.values(SCREENINGS_MAP)
-    .sort((a, b) => b.final_score_pct - a.final_score_pct);
+    .sort((a, b) => (b.final_score_pct || 0) - (a.final_score_pct || 0));
 
   sortedRows.forEach(row => {
-
     const tr = document.createElement("tr");
 
-    const badge = row.decision === "SHORTLIST"
+    const decision = row.decision || "REJECT";
+    const badge = decision === "SHORTLIST"
       ? `<span class="badge success">Shortlisted</span>`
       : `<span class="badge danger">Rejected</span>`;
 
-    const scoreColor = row.decision === "SHORTLIST"
+    const score = Number(row.final_score_pct || 0);
+    const scoreColor = decision === "SHORTLIST"
       ? "linear-gradient(90deg, #22c55e, #16a34a)"
       : "linear-gradient(90deg, #ef4444, #dc2626)";
 
@@ -80,27 +85,25 @@ function renderTable() {
         <input type="checkbox" class="rowSelect" data-id="${row._id}">
       </td>
 
-      <td>${row.candidate_name}</td>
+      <td>${row.candidate_name || "Candidate"}</td>
 
       <td>
         <div class="score-bar">
           <div class="score-fill"
-               style="width:${row.final_score_pct}%; background:${scoreColor}">
+               style="width:${score}%; background:${scoreColor}">
           </div>
-          <span class="score-text">${row.final_score_pct}%</span>
+          <span class="score-text">${score}%</span>
         </div>
       </td>
 
       <td>${badge}</td>
 
       <td>
-        <button class="btn-outline"
-                onclick="openDetails('${row._id}')">
+        <button class="btn-outline" onclick="openDetails('${row._id}')">
           View
         </button>
 
-        <button class="btn-outline small"
-                onclick="openPDF('${row.pdf_filename}')">
+        <button class="btn-outline small" onclick="openPDF('${row.pdf_filename || ""}')">
           PDF
         </button>
       </td>
@@ -112,6 +115,7 @@ function renderTable() {
   updateStats();
 }
 
+
 /* ===============================
    Add Row
 ================================= */
@@ -120,11 +124,11 @@ function addRowToTable(row) {
   renderTable();
 }
 
+
 /* ===============================
    AJAX Resume Scoring
 ================================= */
 async function scoreResumeAJAX(formEl) {
-
   const status = document.getElementById("scoreStatus");
   if (status) status.textContent = "Scoring resumes...";
 
@@ -133,7 +137,6 @@ async function scoreResumeAJAX(formEl) {
   const formData = new FormData(formEl);
 
   try {
-
     const res = await fetch("/screening/score", {
       method: "POST",
       body: formData
@@ -166,11 +169,11 @@ async function scoreResumeAJAX(formEl) {
   hideLoader();
 }
 
+
 /* ===============================
    Submit Shortlist
 ================================= */
 async function submitShortlist() {
-
   const selected = Array.from(document.querySelectorAll(".rowSelect"))
     .filter(cb => cb.checked)
     .map(cb => SCREENINGS_MAP[cb.dataset.id]);
@@ -183,7 +186,6 @@ async function submitShortlist() {
   showLoader();
 
   try {
-
     const res = await fetch("/screening/shortlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -207,55 +209,52 @@ async function submitShortlist() {
   }
 }
 
+
 /* ===============================
    Modal: Modern Candidate Details
-   (LIMITED + CLEAN VERSION)
 ================================= */
 function openDetails(id) {
-
   const row = SCREENINGS_MAP[id];
   if (!row) return;
 
   const cv = row.parsed_cv || {};
 
-  /* -------- Limit Skills (max 8) -------- */
   const skills = (cv.skills_list || []).slice(0, 8);
   const skillsHTML = skills.length
     ? skills.map(skill => `<span class="skill-tag">${skill}</span>`).join("")
     : "Not available";
 
-  /* -------- Limit Summary -------- */
   const summary = cv.summary
-    ? (cv.summary.length > 600
-        ? cv.summary.substring(0, 600) + "..."
-        : cv.summary)
+    ? (cv.summary.length > 600 ? cv.summary.substring(0, 600) + "..." : cv.summary)
     : "Not available";
 
-  /* -------- Limit Experience -------- */
   const experience = cv.experience
-    ? (cv.experience.length > 800
-        ? cv.experience.substring(0, 800) + "..."
-        : cv.experience)
+    ? (cv.experience.length > 800 ? cv.experience.substring(0, 800) + "..." : cv.experience)
     : "Not available";
 
-  document.getElementById("modalTop").innerHTML = `
+  const modalTop = document.getElementById("modalTop");
+  const parsedContent = document.getElementById("parsedContent");
+  const modal = document.getElementById("detailsModal");
+
+  if (!modalTop || !parsedContent || !modal) return;
+
+  modalTop.innerHTML = `
     <div class="candidate-header">
       <div>
-        <h2>${row.candidate_name}</h2>
+        <h2>${row.candidate_name || "Candidate"}</h2>
         <p class="candidate-role">${cv.title || ""}</p>
       </div>
       <div class="candidate-meta">
-        <span class="score-pill">${row.final_score_pct}%</span>
+        <span class="score-pill">${row.final_score_pct || 0}%</span>
         <span class="decision-pill ${row.decision === "SHORTLIST" ? "short" : "reject"}">
-          ${row.decision}
+          ${row.decision || "REJECT"}
         </span>
       </div>
     </div>
   `;
 
-  document.getElementById("parsedContent").innerHTML = `
+  parsedContent.innerHTML = `
     <div class="details-grid">
-
       <div class="detail-section">
         <h4>Professional Summary</h4>
         <p>${summary}</p>
@@ -273,54 +272,61 @@ function openDetails(id) {
 
       <div class="detail-section">
         <h4>Skills</h4>
-        <div class="skill-tags">
-          ${skillsHTML}
-        </div>
+        <div class="skill-tags">${skillsHTML}</div>
       </div>
-
     </div>
   `;
 
-  document.getElementById("detailsModal").style.display = "flex";
+  modal.style.display = "flex";
 }
 
 function closeDetails() {
-  document.getElementById("detailsModal").style.display = "none";
+  const modal = document.getElementById("detailsModal");
+  if (modal) modal.style.display = "none";
 }
+
 
 /* ===============================
    Modal: PDF Preview
 ================================= */
 function openPDF(filename) {
-  document.getElementById("pdfFrame").src = `/screening/uploads/${filename}`;
-  document.getElementById("pdfModal").style.display = "flex";
+  if (!filename) return;
+  const frame = document.getElementById("pdfFrame");
+  const modal = document.getElementById("pdfModal");
+  if (frame) frame.src = `/screening/uploads/${filename}`;
+  if (modal) modal.style.display = "flex";
 }
 
 function closePDF() {
-  document.getElementById("pdfFrame").src = "";
-  document.getElementById("pdfModal").style.display = "none";
+  const frame = document.getElementById("pdfFrame");
+  const modal = document.getElementById("pdfModal");
+  if (frame) frame.src = "";
+  if (modal) modal.style.display = "none";
 }
+
 
 /* ===============================
    Reset Session
 ================================= */
 async function resetSession() {
-  await fetch("/screening/reset", { method: "POST" });
+  try {
+    await fetch("/screening/reset", { method: "POST" });
+  } catch (e) {
+    console.warn("Reset failed:", e);
+  }
   location.reload();
 }
 
+
 /* ===============================
-   DOM Ready
+   DOM Ready: attach scoring handler safely
 ================================= */
 document.addEventListener("DOMContentLoaded", () => {
-
   const form = document.getElementById("scoreForm");
-
   if (form) {
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       scoreResumeAJAX(this);
     });
   }
-
 });
