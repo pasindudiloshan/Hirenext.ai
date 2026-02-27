@@ -1,5 +1,3 @@
-# app/controllers/job_controller.py
-
 import os
 from werkzeug.utils import secure_filename
 from flask import (
@@ -31,8 +29,7 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 
 def allowed_file(filename: str) -> bool:
-    return "." in filename and \
-           filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # -----------------------------
@@ -48,9 +45,9 @@ def serialize_job(job: dict) -> dict:
 
 
 # =====================================================
-# 🟦 DASHBOARD (ROOT PAGE)
+# 🟦 DASHBOARD (MOVED TO /dashboard)
 # =====================================================
-@job_bp.route("/", methods=["GET"])
+@job_bp.route("/dashboard", methods=["GET"])
 def dashboard_page():
     jobs = JobModel.get_all()
     return render_template("dashboard.html", jobs=jobs)
@@ -88,14 +85,12 @@ def create_job_submit():
     """
     Handle job creation form submission with optional image upload.
     """
-
     image_path = ""
 
     # 1️⃣ Handle image upload
     file = request.files.get("job_image")
 
     if file and file.filename:
-
         if not allowed_file(file.filename):
             flash("Invalid image type. Allowed: png, jpg, jpeg, webp", "danger")
             return render_template(

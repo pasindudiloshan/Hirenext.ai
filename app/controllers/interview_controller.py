@@ -1,25 +1,3 @@
-# app/controllers/interview_controller.py
-# HireNext.ai — Interview Calendar + Scheduling Controller (UPDATED)
-#
-# ✅ Adds (per your calendar → meeting flow):
-# - GET  /interview/meeting/<interview_id>                 (renders meeting.html)
-# - GET  /interview/api/interview/<interview_id>           (fetch one interview)
-# - POST /interview/api/interview/<interview_id>/update    (update interview)
-# - POST /interview/api/interview/<interview_id>/cancel    (optional cancel)
-#
-# ✅ Adds (per your email popup flow):
-# - GET  /interview/mail                                  (renders mail.html popup)
-# - POST /interview/api/send_manual_email                 (send Gmail SMTP email)
-#
-# ✅ Keeps existing:
-# - GET  /interview/calander
-# - GET  /interview/schedule
-# - GET  /interview/api/day_slots
-# - GET  /interview/api/batch_interviews
-# - POST /interview/api/schedule
-# - POST /interview/api/send_invites
-# - GET  /interview/api/calendar_events
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -84,6 +62,13 @@ def _get_db():
     return current_app.mongo.db
 
 
+def _remaining(shortlisted_count: int, interviews_scheduled: int) -> int:
+    try:
+        return max(0, int(shortlisted_count) - int(interviews_scheduled))
+    except Exception:
+        return 0
+
+
 # ============================================================
 # Pages
 # ============================================================
@@ -106,7 +91,6 @@ def calander_page():
         start = _iso_date(now - timedelta(days=30))
         end = _iso_date(now + timedelta(days=180))
 
-    # Reuse service (single source of truth)
     events = InterviewService.get_calendar_events(
         start_date=start,
         end_date=end,
@@ -146,9 +130,18 @@ def schedule_page():
 
     # Right side: upcoming interviews for batch
     recent_interviews: List[Dict[str, Any]] = []
+    total_scheduled_for_active_batch = 0
+
     try:
         if active_batch and active_batch.get("_id"):
             bid = str(active_batch["_id"])
+
+            # total interviews scheduled for this batch (all dates)
+            total_scheduled_for_active_batch = int(
+                db.interviews.count_documents({"batch_id": bid}) or 0
+            )
+
+            # recent upcoming (for right pane)
             today = _iso_date(datetime.now(timezone.utc))
             future = _iso_date(datetime.now(timezone.utc) + timedelta(days=60))
             recent_interviews = list(
@@ -157,9 +150,12 @@ def schedule_page():
             )
     except Exception:
         recent_interviews = []
+        total_scheduled_for_active_batch = 0
 
     recent_interviews_ser = [_json_safe(x) for x in recent_interviews]
     meeting_link = (active_batch or {}).get("meeting_link_default") or ""
+
+    remaining_to_schedule = _remaining(total_shortlisted, total_scheduled_for_active_batch)
 
     # Add counts per batch for left rail
     try:
@@ -175,12 +171,19 @@ def schedule_page():
 
         for b in batches_ser:
             b_id = str(b.get("_id", ""))
-            b["shortlisted_count"] = _batch_shortlisted_count(b)
-            b["interviews_scheduled"] = counts.get(b_id, 0)
+            sc = _batch_shortlisted_count(b)
+            ic = counts.get(b_id, 0)
+
+            b["shortlisted_count"] = int(sc)
+            b["interviews_scheduled"] = int(ic)
+            b["remaining_to_schedule"] = _remaining(sc, ic)
+
     except Exception:
         for b in batches_ser:
-            b["shortlisted_count"] = _batch_shortlisted_count(b)
+            sc = _batch_shortlisted_count(b)
+            b["shortlisted_count"] = int(sc)
             b["interviews_scheduled"] = 0
+            b["remaining_to_schedule"] = int(sc)
 
     selected_date_label = None
     if selected_date_iso:
@@ -196,6 +199,8 @@ def schedule_page():
         active_batch=active_batch_ser,
         shortlisted_candidates=shortlisted_candidates,
         total_shortlisted=total_shortlisted,
+        total_scheduled=total_scheduled_for_active_batch,
+        remaining_to_schedule=remaining_to_schedule,
         recent_interviews=recent_interviews_ser,
         meeting_link=meeting_link,
         selected_date_iso=selected_date_iso,
@@ -207,7 +212,7 @@ def schedule_page():
 @interview_bp.route("/meeting/<interview_id>", methods=["GET"])
 def meeting_page(interview_id: str):
     """
-    ✅ Meeting edit page (opened from calendar day-details popup)
+    Meeting edit page (opened from calendar day-details popup)
     Template: templates/interview/meeting.html
     The page will load interview details via:
       GET /interview/api/interview/<id>
@@ -216,7 +221,7 @@ def meeting_page(interview_id: str):
 
 
 # ============================================================
-# ✅ NEW PAGE: mail popup
+# Mail popup page
 # ============================================================
 
 @interview_bp.route("/mail", methods=["GET"])
@@ -257,7 +262,13 @@ def api_day_slots():
     if not batch:
         return jsonify({"ok": False, "error": "Batch not found"}), 404
 
+    db = _get_db()
     meeting_link = batch.get("meeting_link_default") or ""
+
+    # remaining-to-schedule (server computed)
+    total_shortlisted = len((batch.get("shortlisted_candidates") or []))
+    interviews_scheduled = int(db.interviews.count_documents({"batch_id": str(batch_id)}) or 0)
+    remaining_to_schedule = _remaining(total_shortlisted, interviews_scheduled)
 
     payload = InterviewService.build_slots_with_status(
         batch_id=batch_id,
@@ -272,6 +283,9 @@ def api_day_slots():
         "duration": duration,
         "tz": tz,
         "meeting_link": meeting_link,
+        "total_shortlisted": int(total_shortlisted),
+        "interviews_scheduled": int(interviews_scheduled),
+        "remaining_to_schedule": int(remaining_to_schedule),
         "slots": _json_safe(payload.get("slots", [])),
         "booked": _json_safe(payload.get("booked", [])),
         "interviews": _json_safe(payload.get("interviews", [])),
@@ -283,6 +297,7 @@ def api_batch_interviews():
     """
     Fetch all interviews for a batch.
     Returns scheduled_candidate_ids so UI can schedule remaining candidates across days.
+    Also returns remaining_to_schedule to allow disabling UI.
     """
     db = _get_db()
     batch_id = (request.args.get("batch_id") or "").strip()
@@ -316,10 +331,17 @@ def api_batch_interviews():
     seen = set()
     scheduled_candidate_ids = [c for c in scheduled_candidate_ids if not (c in seen or seen.add(c))]
 
+    total_shortlisted = len((batch.get("shortlisted_candidates") or []))
+    interviews_scheduled = len(rows)
+    remaining_to_schedule = _remaining(total_shortlisted, interviews_scheduled)
+
     return jsonify({
         "ok": True,
         "batch_id": str(batch_id),
         "scheduled_candidate_ids": scheduled_candidate_ids,
+        "total_shortlisted": int(total_shortlisted),
+        "interviews_scheduled": int(interviews_scheduled),
+        "remaining_to_schedule": int(remaining_to_schedule),
         "interviews": safe_rows,
     })
 
@@ -344,6 +366,7 @@ def api_schedule():
     if not isinstance(interviews, list) or len(interviews) == 0:
         return jsonify({"ok": False, "error": "No interviews provided"}), 400
 
+    # ✅ Important: service will also block when remaining_to_schedule == 0
     result = InterviewService.save_confirmed_interviews(
         batch_doc=batch,
         date_iso=date_iso,
@@ -421,7 +444,7 @@ def api_calendar_events():
 
 
 # ============================================================
-# ✅ NEW API: send manual email via Gmail SMTP
+# Send manual email via Gmail SMTP
 # ============================================================
 
 @interview_bp.route("/api/send_manual_email", methods=["POST"])
@@ -443,7 +466,6 @@ def send_manual_email():
             to_email=to_email
         ), 400
 
-    # Read SMTP config from Flask config
     smtp_host = current_app.config.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(current_app.config.get("SMTP_PORT", 587))
     smtp_user = current_app.config.get("SMTP_USER")
@@ -498,15 +520,11 @@ def send_manual_email():
 
 
 # ============================================================
-# ✅ NEW APIs for meeting.html (edit interview)
+# meeting.html APIs (edit interview)
 # ============================================================
 
 @interview_bp.route("/api/interview/<interview_id>", methods=["GET"])
 def api_get_interview(interview_id: str):
-    """
-    Fetch a single interview by _id (Mongo ObjectId).
-    Used by meeting.html.
-    """
     db = _get_db()
     oid = _oid(interview_id)
     if not oid:
@@ -521,13 +539,6 @@ def api_get_interview(interview_id: str):
 
 @interview_bp.route("/api/interview/<interview_id>/update", methods=["POST"])
 def api_update_interview(interview_id: str):
-    """
-    Update an interview.
-    meeting.html will POST editable fields here.
-
-    ⚠️ This controller delegates validation/overlap rules to InterviewService.
-    You must add InterviewService.update_interview(...) accordingly (next step).
-    """
     data = request.get_json(silent=True) or {}
     patch = dict(data or {})
     patch.pop("_id", None)
@@ -536,7 +547,6 @@ def api_update_interview(interview_id: str):
     if not oid:
         return jsonify({"ok": False, "error": "Invalid interview_id"}), 400
 
-    # Only allow these fields to be updated from UI
     ALLOWED = {
         "title",
         "type",
@@ -550,13 +560,12 @@ def api_update_interview(interview_id: str):
         "meeting_link_default",
         "interviewer",
         "status",
+        "tz",
     }
     clean_patch = {k: v for k, v in patch.items() if k in ALLOWED}
 
-    # Ensure updated_at is always set
     clean_patch["updated_at"] = datetime.now(timezone.utc)
 
-    # ✅ Delegate hard checks (overlap, candidate duplicate, etc.) to service
     result = InterviewService.update_interview(
         interview_id=str(interview_id),
         patch=clean_patch
@@ -570,9 +579,6 @@ def api_update_interview(interview_id: str):
 
 @interview_bp.route("/api/interview/<interview_id>/cancel", methods=["POST"])
 def api_cancel_interview(interview_id: str):
-    """
-    Optional: mark interview as cancelled.
-    """
     oid = _oid(interview_id)
     if not oid:
         return jsonify({"ok": False, "error": "Invalid interview_id"}), 400

@@ -1,9 +1,11 @@
 {# templates/interview/schedule.html
-   ✅ CLEANED + ALIGNED with final interview_schedule.js / controller / css
+   ✅ UPDATED: Remaining-to-schedule support + UI lock when remaining = 0
 
-   Changes (for mail popup):
-   - ✈ Send Emails now opens a small popup window (mail.html) instead of posting API.
-   - Added openMailPopup() in extra_js BEFORE interview_schedule.js loads.
+   What’s new:
+   - Left rail shows Remaining (per batch)
+   - Top summary shows Total Scheduled + Remaining
+   - Buttons + slot selection area are disabled when remaining_to_schedule == 0
+   - window.__SCHEDULE_CTX__ now includes totalScheduled + remainingToSchedule
 #}
 
 {% extends "base.html" %}
@@ -11,9 +13,33 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/interview_schedule.css') }}">
+<style>
+  /* Small safe fallback styles (works even if your CSS doesn't include these) */
+  .is-locked-note{
+    margin-top:10px;
+    padding:10px 12px;
+    border:1px solid rgba(255, 94, 0, .35);
+    background: rgba(255, 94, 0, .08);
+    color:#b54b00;
+    border-radius:10px;
+    font-size:13px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .is-disabled {
+    opacity: .55;
+    pointer-events: none;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
+{% set total_short = (total_shortlisted or (shortlisted_candidates|length if shortlisted_candidates else 0)) %}
+{% set total_sched = (total_scheduled if total_scheduled is not none else 0) %}
+{% set remaining = (remaining_to_schedule if remaining_to_schedule is not none else (total_short - total_sched)) %}
+{% set is_locked = ((remaining|int) <= 0) %}
+
 <div class="is-wrap">
 
   <!-- ================= LEFT COLUMN : JOB VACANCIES ================= -->
@@ -68,6 +94,21 @@
                 </span>
               </div>
 
+              <!-- ✅ NEW: Remaining -->
+              <div class="vc-row">
+                <span class="k">Remaining:</span>
+                <span class="v">
+                  {{ b.get('remaining_to_schedule')
+                     if b.get('remaining_to_schedule') is not none
+                     else (
+                        ( (b.get('shortlisted_count') or (b.get('shortlisted_candidates')|length if b.get('shortlisted_candidates') else 0))
+                          - (b.get('interviews_scheduled') or 0)
+                        ) if (b.get('shortlisted_count') is not none or b.get('shortlisted_candidates')) else 0
+                     )
+                  }}
+                </span>
+              </div>
+
               <div class="vc-row">
                 <span class="k">Scheduled Date:</span>
                 <span class="v">{{ b.get('last_scheduled_date') or b.get('scheduled_date') or '-' }}</span>
@@ -100,10 +141,10 @@
         </div>
       </div>
 
-      <div class="is-controls">
+      <div class="is-controls {{ 'is-disabled' if is_locked else '' }}">
         <div class="chip-select">
           <span class="chip-ico">🌐</span>
-          <select id="tzSelect">
+          <select id="tzSelect" {{ 'disabled' if is_locked else '' }}>
             <option value="Asia/Colombo" selected>GMT +05:30 (Asia/Colombo)</option>
             <option value="Asia/Kolkata">GMT +05:30 (Asia/Kolkata)</option>
             <option value="UTC">UTC</option>
@@ -112,7 +153,7 @@
 
         <div class="chip-select">
           <span class="chip-ico">⏱</span>
-          <select id="durationSelect">
+          <select id="durationSelect" {{ 'disabled' if is_locked else '' }}>
             <option value="10" selected>10 Min</option>
             <option value="15">15 Min</option>
             <option value="20">20 Min</option>
@@ -130,9 +171,29 @@
           <div class="sum-text">
             <div class="sum-label">Total Shortlisted:</div>
             <div class="sum-value">
-              <span id="totalShortlisted">
-                {{ total_shortlisted or (shortlisted_candidates|length if shortlisted_candidates else 0) }}
-              </span>
+              <span id="totalShortlisted">{{ total_short }}</span>
+              <span class="muted">Candidates</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sum-left">
+          <div class="sum-ico">✅</div>
+          <div class="sum-text">
+            <div class="sum-label">Scheduled:</div>
+            <div class="sum-value">
+              <span id="totalScheduled">{{ total_sched }}</span>
+              <span class="muted">Interviews</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sum-left">
+          <div class="sum-ico">⏳</div>
+          <div class="sum-text">
+            <div class="sum-label">Remaining:</div>
+            <div class="sum-value">
+              <span id="remainingToSchedule">{{ remaining }}</span>
               <span class="muted">Candidates</span>
             </div>
           </div>
@@ -148,6 +209,16 @@
           </div>
         </div>
       </div>
+
+      {% if is_locked %}
+        <div class="is-locked-note" id="lockedNote">
+          <span>🛑</span>
+          <div>
+            <b>All shortlisted candidates are already scheduled.</b>
+            <div class="muted">You can still view the calendar and scheduled interviews, but slot booking is disabled.</div>
+          </div>
+        </div>
+      {% endif %}
 
       <!-- calendar -->
       <div class="is-cal">
@@ -171,12 +242,12 @@
       </div>
 
       <!-- action buttons row -->
-      <div class="is-cta-row">
-        <button class="btn btn-ghost" id="meetingLinkBtn" type="button">🔗 Meeting Link</button>
-        <button class="btn btn-success" id="confirmSlotsBtn" type="button">✓ Confirm Slots</button>
+      <div class="is-cta-row {{ 'is-disabled' if is_locked else '' }}">
+        <button class="btn btn-ghost" id="meetingLinkBtn" type="button" {{ 'disabled' if is_locked else '' }}>🔗 Meeting Link</button>
+        <button class="btn btn-success" id="confirmSlotsBtn" type="button" {{ 'disabled' if is_locked else '' }}>✓ Confirm Slots</button>
 
-        {# ✅ UPDATED: open popup mail.html #}
-        <button class="btn btn-primary" id="sendEmailsBtn" type="button" onclick="openMailPopup()">
+        <button class="btn btn-primary" id="sendEmailsBtn" type="button"
+                onclick="openMailPopup()" {{ 'disabled' if is_locked else '' }}>
           ✈ Send Emails
         </button>
       </div>
@@ -200,8 +271,12 @@
         </div>
       </div>
 
-      <div class="slots-list" id="slotsList">
-        <div class="slot-skeleton">Select a date to load slots</div>
+      <div class="slots-list {{ 'is-disabled' if is_locked else '' }}" id="slotsList">
+        {% if is_locked %}
+          <div class="slot-skeleton">All shortlisted candidates are already scheduled.</div>
+        {% else %}
+          <div class="slot-skeleton">Select a date to load slots</div>
+        {% endif %}
       </div>
 
       <div class="slots-legend">
@@ -215,9 +290,6 @@
 
 </div>
 
-{# ============================================================
-   ✅ Meeting Link Preview Modal (used by interview_schedule.js)
-   ============================================================ #}
 <div id="hnMeetingModal" class="hn-mm" aria-hidden="true">
   <div class="hn-mm-backdrop" data-close="1"></div>
 
@@ -247,20 +319,46 @@
 {% block extra_js %}
 <script>
   // ✅ Must be defined BEFORE interview_schedule.js loads
+  // ✅ FIX: do NOT use `remaining` from content block (it won't exist here)
+
+  const __totalShortlisted =
+    {{ (total_shortlisted or (shortlisted_candidates|length if shortlisted_candidates else 0)) | tojson }};
+
+  const __totalScheduled =
+    {{ (total_scheduled or 0) | tojson }};
+
+  const __remainingToSchedule_raw =
+    {{ (remaining_to_schedule if remaining_to_schedule is not none else None) | tojson }};
+
+  const __remainingToSchedule =
+    (__remainingToSchedule_raw !== null && __remainingToSchedule_raw !== undefined)
+      ? Number(__remainingToSchedule_raw)
+      : Math.max(0, Number(__totalShortlisted) - Number(__totalScheduled));
+
   window.__SCHEDULE_CTX__ = {
     activeBatch: {{ (active_batch or {}) | tojson }},
     shortlistedCandidates: {{ (shortlisted_candidates or []) | tojson }},
     batches: {{ (batches or []) | tojson }},
     recentInterviews: {{ (recent_interviews or []) | tojson }},
     meetingLink: {{ (meeting_link or '') | tojson }},
-    selectedDate: {{ (selected_date_iso or '') | tojson }}
+    selectedDate: {{ (selected_date_iso or '') | tojson }},
+
+    totalShortlisted: __totalShortlisted,
+    totalScheduled: __totalScheduled,
+    remainingToSchedule: __remainingToSchedule,
+    isLocked: (__remainingToSchedule <= 0)
   };
 
-  // ✅ Popup opener (small window)
   function openMailPopup() {
     const ctx = window.__SCHEDULE_CTX__ || {};
-    const dateISO = (ctx.selectedDate || "").trim();
+    const locked = !!ctx.isLocked;
 
+    if (locked) {
+      alert("All shortlisted candidates are already scheduled.");
+      return;
+    }
+
+    const dateISO = (ctx.selectedDate || "").trim();
     if (!dateISO) {
       alert("Please select a date first.");
       return;

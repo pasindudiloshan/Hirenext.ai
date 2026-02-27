@@ -10,15 +10,17 @@
 #
 # ✅ NEW (for meeting.html edit page):
 # - update_interview(interview_id, patch)
-#     - supports updating date/time/duration OR start_label/end_label OR start_time/end_time
-#     - recomputes start_time/end_time + labels consistently
-#     - prevents overlaps (excluding itself)
-#     - prevents duplicate candidate scheduling in same batch (excluding itself)
 # - cancel_interview(interview_id)
 #
-# Notes:
-# - Stored start_time/end_time are ISO strings (with offset if provided/derived).
-# - Slot computations use selected tz (ZoneInfo).
+# ✅ FIXES:
+# - meeting_link_default patch is applied to screening_batches
+# - batch update works for ObjectId OR string id
+#
+# ✅ NEW FIX (Remaining-to-schedule / prevent extra slots):
+# - save_confirmed_interviews() now blocks scheduling if:
+#     - remaining_to_schedule == 0
+#     - OR len(interviews) > remaining_to_schedule
+# - (recommended) only allows scheduling candidate_ids that are in shortlisted_candidates
 
 from __future__ import annotations
 
@@ -87,6 +89,19 @@ class InterviewService:
             return ObjectId(str(val))
         except Exception:
             return None
+
+    @staticmethod
+    def _maybe_oid(val: Any) -> Any:
+        """
+        If val looks like an ObjectId string, convert it.
+        Otherwise return original value.
+        """
+        if isinstance(val, ObjectId):
+            return val
+        if isinstance(val, str):
+            oid = InterviewService._oid(val)
+            return oid if oid else val
+        return val
 
     # ---------------------------------------------------------
     # Date/time helpers
@@ -410,6 +425,41 @@ class InterviewService:
 
         return True, None
 
+    # ---------------------------
+    # NEW: shortlist guard
+    # ---------------------------
+    @staticmethod
+    def _extract_shortlisted_candidate_ids(batch_doc: Dict[str, Any]) -> set[str]:
+        """
+        Returns candidate_id set from batch_doc.shortlisted_candidates.
+
+        Supports common shapes:
+          - {"candidate_id": "..."}
+          - {"_id": "..."}   (if you stored candidate as _id)
+        """
+        out: set[str] = set()
+        for c in (batch_doc.get("shortlisted_candidates") or []):
+            if not isinstance(c, dict):
+                continue
+            cid = c.get("candidate_id")
+            if cid is None:
+                cid = c.get("_id")
+            cid_s = str(cid or "").strip()
+            if cid_s:
+                out.add(cid_s)
+        return out
+
+    @staticmethod
+    def _remaining_to_schedule(batch_doc: Dict[str, Any], batch_id: str) -> Tuple[int, int, int]:
+        """
+        Returns (shortlisted_total, already_scheduled, remaining)
+        """
+        db = InterviewService._db()
+        shortlisted_total = len(batch_doc.get("shortlisted_candidates") or [])
+        already_scheduled = int(db[InterviewService.COLLECTION].count_documents({"batch_id": str(batch_id)}) or 0)
+        remaining = max(0, int(shortlisted_total) - int(already_scheduled))
+        return int(shortlisted_total), int(already_scheduled), int(remaining)
+
     # ---------------------------------------------------------
     # Save interviews
     # ---------------------------------------------------------
@@ -428,6 +478,9 @@ class InterviewService:
         Server-side safety:
         - validates no overlap on the day
         - validates candidates aren't already scheduled in this batch
+        - ✅ blocks extra scheduling when remaining_to_schedule == 0
+        - ✅ blocks when user sends more interviews than remaining slots for candidates
+        - ✅ (recommended) only allows candidate_ids that exist in shortlisted_candidates
         """
         db = InterviewService._db()
         tz = tz or DEFAULT_TZ
@@ -436,11 +489,35 @@ class InterviewService:
         if not batch_id:
             return {"ok": False, "error": "Invalid batch document"}
 
+        if not isinstance(interviews, list) or not interviews:
+            return {"ok": False, "error": "No interviews provided"}
+
+        # ✅ NEW: remaining-to-schedule guard
+        shortlisted_total, already_scheduled, remaining = InterviewService._remaining_to_schedule(batch_doc, batch_id)
+        if remaining <= 0:
+            return {"ok": False, "error": "All shortlisted candidates are already scheduled."}
+        if len(interviews) > remaining:
+            return {
+                "ok": False,
+                "error": f"Only {remaining} shortlisted candidate(s) remaining to schedule."
+            }
+
+        # ✅ NEW: restrict scheduling to shortlisted candidates (recommended)
+        shortlisted_ids = InterviewService._extract_shortlisted_candidate_ids(batch_doc)
+        # If shortlist has candidate IDs, enforce them
+        if shortlisted_ids:
+            for it in interviews:
+                cid = str((it or {}).get("candidate_id") or "").strip()
+                if not cid:
+                    return {"ok": False, "error": "candidate_id is required for scheduling."}
+                if cid not in shortlisted_ids:
+                    return {"ok": False, "error": "Candidate is not shortlisted for this batch."}
+
         normalized: List[Dict[str, Any]] = []
         tzinfo = InterviewService._tzinfo(tz)
 
         for it in interviews:
-            item = dict(it)
+            item = dict(it or {})
 
             if item.get("candidate_id") is not None:
                 item["candidate_id"] = str(item.get("candidate_id"))
@@ -524,10 +601,12 @@ class InterviewService:
         except Exception as e:
             return {"ok": False, "error": f"DB insert failed: {e}"}
 
+        # ✅ FIX: update screening_batches even if _id is a string
         try:
+            batch_pk = InterviewService._maybe_oid(batch_doc.get("_id"))
             count = db[InterviewService.COLLECTION].count_documents({"batch_id": batch_id})
             db["screening_batches"].update_one(
-                {"_id": batch_doc.get("_id")},
+                {"_id": batch_pk},
                 {"$set": {
                     "interviews_scheduled": int(count),
                     "last_scheduled_date": date_iso,
@@ -538,7 +617,13 @@ class InterviewService:
         except Exception:
             pass
 
-        return {"ok": True, "inserted": len(docs)}
+        return {
+            "ok": True,
+            "inserted": len(docs),
+            "shortlisted_total": shortlisted_total,
+            "already_scheduled_before": already_scheduled,
+            "remaining_before": remaining,
+        }
 
     # ---------------------------------------------------------
     # Calendar events
@@ -551,10 +636,6 @@ class InterviewService:
     ) -> List[Dict[str, Any]]:
         """
         Returns interviews between date range (inclusive) suitable for calander.js.
-        Shape:
-          {
-            id, title, type, date, time, start_time, end_time, batch_id, candidate_email, ...
-          }
         """
         db = InterviewService._db()
 
@@ -587,7 +668,7 @@ class InterviewService:
         return out
 
     # =========================================================
-    # ✅ NEW: meeting.html support (update / cancel)
+    # meeting.html support (update / cancel)
     # =========================================================
 
     @staticmethod
@@ -608,10 +689,6 @@ class InterviewService:
           - end_label   (HH:MM)
           - start_time  (ISO with offset)
           - end_time    (ISO with offset)
-        Accepts one of:
-          A) time + duration
-          B) start_label + end_label
-          C) start_time_iso + end_time_iso
         """
         tz = tz or DEFAULT_TZ
         tzinfo = InterviewService._tzinfo(tz)
@@ -662,7 +739,6 @@ class InterviewService:
             except Exception:
                 return False, {}, "Invalid start_time/end_time"
 
-        # nothing to derive
         return True, {}, None
 
     @staticmethod
@@ -674,9 +750,6 @@ class InterviewService:
         self_oid: ObjectId,
         new_interval: Tuple[datetime, datetime],
     ) -> Tuple[bool, Optional[str]]:
-        """
-        Check overlaps on a day excluding the current interview.
-        """
         db = InterviewService._db()
         tz = tz or DEFAULT_TZ
 
@@ -701,9 +774,6 @@ class InterviewService:
         candidate_id: str,
         self_oid: ObjectId,
     ) -> Tuple[bool, Optional[str]]:
-        """
-        Prevent same candidate scheduled twice in a batch (excluding current interview).
-        """
         candidate_id = str(candidate_id or "").strip()
         if not candidate_id:
             return True, None
@@ -720,12 +790,6 @@ class InterviewService:
 
     @staticmethod
     def update_interview(interview_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update interview document safely:
-        - recalculates time fields when date/time/duration or label/iso changes
-        - enforces: no overlap (excluding itself)
-        - enforces: candidate not scheduled twice in same batch (excluding itself)
-        """
         db = InterviewService._db()
         oid = InterviewService._oid(interview_id)
         if not oid:
@@ -735,18 +799,15 @@ class InterviewService:
         if not current:
             return {"ok": False, "error": "Interview not found"}
 
-        # base identity
         batch_id = str(current.get("batch_id") or "")
         if not batch_id:
             return {"ok": False, "error": "Interview missing batch_id"}
 
-        # tz + date
         tz = str(patch.get("tz") or current.get("tz") or DEFAULT_TZ)
         date_iso = str(patch.get("date") or current.get("date") or "").strip()
         if not date_iso:
             return {"ok": False, "error": "date is required"}
 
-        # candidate duplicate check (if candidate_id exists)
         cand_id = str(patch.get("candidate_id") or current.get("candidate_id") or "").strip()
         ok, msg = InterviewService._validate_candidate_not_duplicate_excluding_self(
             batch_id=batch_id,
@@ -756,11 +817,6 @@ class InterviewService:
         if not ok:
             return {"ok": False, "error": msg or "Candidate already scheduled."}
 
-        # Determine whether we need to re-derive time fields
-        # Supported edit inputs from meeting page:
-        # - time + duration
-        # - start_label/end_label
-        # - start_time/end_time
         time_hm = patch.get("time")
         duration_min = patch.get("duration") or patch.get("duration_min") or current.get("duration_min")
 
@@ -783,11 +839,9 @@ class InterviewService:
 
         derived: Dict[str, Any] = {}
         if must_recalc:
-            # If user only changed date but not time, keep current start_label if possible
             if time_hm is None and start_label is None and start_time_iso is None:
                 time_hm = str(current.get("start_label") or "")
                 if not time_hm:
-                    # fallback from start_time
                     st_iso_cur = str(current.get("start_time") or "")
                     if st_iso_cur:
                         try:
@@ -796,7 +850,6 @@ class InterviewService:
                         except Exception:
                             time_hm = None
 
-            # prefer: time+duration, else labels, else iso
             ok, derived, err = InterviewService._derive_labels_and_iso(
                 date_iso=date_iso,
                 tz=tz,
@@ -810,7 +863,6 @@ class InterviewService:
             if not ok:
                 return {"ok": False, "error": err or "Invalid scheduling fields"}
 
-            # overlap check using derived interval (if we have it)
             if derived.get("start_time") and derived.get("end_time"):
                 try:
                     st = InterviewService._parse_iso_as_aware(str(derived["start_time"]), tz)
@@ -827,22 +879,20 @@ class InterviewService:
                 except Exception:
                     return {"ok": False, "error": "Invalid derived start/end time"}
 
-        # Build update doc
         update_doc: Dict[str, Any] = {}
 
-        # Allow safe text fields
-        for k in ["title", "type", "notes", "meeting_link", "status", "interviewer",
-                  "candidate_name", "candidate_email", "candidate_id", "job_title", "job_id"]:
+        for k in [
+            "title", "type", "notes", "meeting_link", "status", "interviewer",
+            "candidate_name", "candidate_email", "candidate_id", "job_title", "job_id"
+        ]:
             if k in patch and patch[k] is not None:
                 update_doc[k] = patch[k]
 
-        # Update tz/date/duration_min
         if "tz" in patch and patch["tz"] is not None:
             update_doc["tz"] = tz
         if "date" in patch and patch["date"] is not None:
             update_doc["date"] = date_iso
 
-        # duration normalization
         if "duration" in patch and patch["duration"] is not None:
             try:
                 update_doc["duration_min"] = int(patch["duration"])
@@ -854,15 +904,23 @@ class InterviewService:
             except Exception:
                 return {"ok": False, "error": "Invalid duration_min"}
 
-        # Apply derived time fields
         if derived:
             update_doc.update(derived)
 
-        # Always set updated_at
         update_doc["updated_at"] = datetime.now(timezone.utc)
 
-        # If user included "time" we keep it only as UI field (not stored)
-        # (calendar uses start_label anyway)
+        # Apply meeting_link_default to screening_batches
+        if "meeting_link_default" in patch and patch["meeting_link_default"] is not None:
+            try:
+                db["screening_batches"].update_one(
+                    {"_id": InterviewService._oid(batch_id) or batch_id},
+                    {"$set": {
+                        "meeting_link_default": str(patch["meeting_link_default"]),
+                        "updated_at": datetime.now(timezone.utc),
+                    }}
+                )
+            except Exception:
+                pass
 
         try:
             db[InterviewService.COLLECTION].update_one({"_id": oid}, {"$set": update_doc})
@@ -874,9 +932,6 @@ class InterviewService:
 
     @staticmethod
     def cancel_interview(interview_id: str) -> Dict[str, Any]:
-        """
-        Mark interview as CANCELLED (keeps record for audit).
-        """
         db = InterviewService._db()
         oid = InterviewService._oid(interview_id)
         if not oid:

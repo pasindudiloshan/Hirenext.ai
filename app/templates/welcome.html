@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Welcome | HireNext.ai</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
+
+  <!-- ✅ Font Awesome Kit -->
+  <script src="https://kit.fontawesome.com/e2638107b1.js" crossorigin="anonymous"></script>
+</head>
+
+<body class="welcome-body">
+
+  <!-- ✅ Top Navbar (base.html look) -->
+  <header class="topbar welcome-topbar">
+    <div class="topbar-left">
+      <div class="logo welcome-logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HireNext Logo">
+        <span class="brand-text">
+          <span class="brand-black">HireNext</span><span class="brand-blue">.ai</span>
+        </span>
+      </div>
+    </div>
+
+
+    <div class="topbar-right welcome-actions">
+      <a class="btn-outline" href="/login">Register</a>
+      <a class="btn-primary" href="/login">Login</a>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="welcome-hero">
+    <div class="welcome-hero-inner">
+
+      <div class="hero-left">
+        <span class="pill">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          AI Powered
+        </span>
+
+        <h1 class="hero-title">
+          Welcome to <span class="brand-black">HireNext</span><span class="brand-blue">.ai</span>
+        </h1>
+
+        <p class="hero-subtitle">
+           A Generative AI-Powered Platform for Efficient Automated Recruitment and Candidate Evaluation
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn-primary hero-btn" href="/dashboard">Get Started</a>
+        </div>
+
+        <div class="hero-note">
+          <span class="note-dot"></span>
+          Works with your existing hiring workflow
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="slider" id="hnSlider" aria-label="Feature slider">
+          <div class="slides">
+            <div class="slide is-active">
+              <img src="{{ url_for('static', filename='images/slide1.JPG') }}" alt="Slide 1">
+            </div>
+            <div class="slide">
+              <img src="{{ url_for('static', filename='images/slide2.JPG') }}" alt="Slide 2">
+            </div>
+            <div class="slide">
+              <img src="{{ url_for('static', filename='images/slide3.JPG') }}" alt="Slide 3">
+            </div>
+            <div class="slide">
+              <img src="{{ url_for('static', filename='images/slide4.JPG') }}" alt="Slide 4">
+            </div>
+          </div>
+
+          <div class="slider-dots" id="hnSliderDots" aria-hidden="true"></div>
+
+          <button class="slider-nav prev" type="button" aria-label="Previous slide">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <button class="slider-nav next" type="button" aria-label="Next slide">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="welcome-features">
+    <div class="wrap">
+      <h2 class="section-title">Core AI Features</h2>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-file-lines"></i></div>
+          <h3>AI Resume Screening</h3>
+          <p>Auto-score and shortlist candidates from multiple resumes in seconds.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-comments"></i></div>
+          <h3>AI Q &amp; A</h3>
+          <p>Generate role-specific questions and expand answers instantly.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-bullseye"></i></div>
+          <h3>AI Candidate Evaluation</h3>
+          <p>Evaluate candidates by skills, experience, and fit with smart scoring.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COUNTERS -->
+  <section class="welcome-stats">
+    <div class="wrap">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+          <div class="stat-meta">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value" data-counter data-target="12452">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-building"></i></div>
+          <div class="stat-meta">
+            <div class="stat-label">Registered Companies</div>
+            <div class="stat-value" data-counter data-target="732">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ✅ SAME FOOTER AS base.html -->
+  <footer id="footer" class="footer">
+    <div class="footer-container">
+
+      <div class="footer-col">
+        <h3 class="footer-logo">
+          <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HireNext Logo">
+          <span>
+            <span class="brand-black">HireNext</span><span class="brand-blue">.ai</span>
+          </span>
+        </h3>
+        <p class="footer-desc">
+          AI-powered recruitment platform helping companies
+          screen, shortlist, and hire smarter.
+        </p>
+      </div>
+
+            <div class="footer-col">
+        <h4>Platform</h4>
+        <ul>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/jobs/">Job Management</a></li>
+          <li><a href="/screening/new">Resume Screening</a></li>
+          <li><a href="/interview/calander">Calendar</a></li>
+          <li><a href="/interview/schedule">Interview Scheduling</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#">About</a></li>
+          <li><a href="#">Careers</a></li>
+          <li><a href="#">Contact</a></li>
+          <li><a href="#">Support</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms &amp; Conditions</a></li>
+          <li><a href="#">Security</a></li>
+          <li><a href="#">Compliance</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="footer-bottom">
+      <div class="footer-bottom-left">
+        © 2026 HireNext.ai — All Rights Reserved
+      </div>
+
+      <div class="footer-socials">
+        <a href="#">Twitter</a>
+        <a href="#">LinkedIn</a>
+        <a href="#">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <script defer src="{{ url_for('static', filename='js/welcome.js') }}"></script>
+</body>
+</html>

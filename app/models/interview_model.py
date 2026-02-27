@@ -1,11 +1,13 @@
 # app/models/interview_model.py
 # HireNext.ai — Interview DB Model (Mongo Layer Only)
 #
-# This file ONLY talks to MongoDB.
-# All business logic lives in interview_service.py
+# ✅ This file ONLY talks to MongoDB (collection: interviews).
+# ✅ All scheduling/business rules must stay in interview_service.py
+
+from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 from flask import current_app
@@ -22,32 +24,40 @@ class InterviewModel:
     COLLECTION = "interviews"
 
     # --------------------------------------------------
-    # Internal helper
+    # Internal helpers
     # --------------------------------------------------
     @staticmethod
     def _db():
         return current_app.mongo.db
 
     @staticmethod
-    def _oid(val: str) -> Optional[ObjectId]:
+    def _oid(val: Any) -> Optional[ObjectId]:
+        """Safely convert to ObjectId."""
         try:
-            return ObjectId(val)
+            return ObjectId(str(val))
         except Exception:
             return None
+
+    @staticmethod
+    def _now_utc() -> datetime:
+        return datetime.now(timezone.utc)
 
     # --------------------------------------------------
     # CREATE
     # --------------------------------------------------
     @staticmethod
-    def insert_many(interviews: List[Dict]) -> bool:
-        """Bulk insert interview documents."""
+    def insert_many(interviews: List[Dict]) -> int:
+        """
+        Bulk insert interview documents.
+        Returns number inserted.
+        """
         if not interviews:
-            return False
+            return 0
         try:
-            InterviewModel._db()[InterviewModel.COLLECTION].insert_many(interviews)
-            return True
+            res = InterviewModel._db()[InterviewModel.COLLECTION].insert_many(interviews)
+            return len(res.inserted_ids or [])
         except Exception:
-            return False
+            return 0
 
     # --------------------------------------------------
     # READ
@@ -73,7 +83,7 @@ class InterviewModel:
         """Interviews for a batch on a specific date (YYYY-MM-DD)."""
         return list(
             InterviewModel._db()[InterviewModel.COLLECTION]
-            .find({"batch_id": str(batch_id), "date": date_iso})
+            .find({"batch_id": str(batch_id), "date": str(date_iso)})
             .sort("start_time", 1)
         )
 
@@ -84,7 +94,7 @@ class InterviewModel:
         batch_id: Optional[str] = None
     ) -> List[Dict]:
         """Calendar queries (month / week / range)."""
-        q: Dict = {"date": {"$gte": start_date, "$lte": end_date}}
+        q: Dict[str, Any] = {"date": {"$gte": str(start_date), "$lte": str(end_date)}}
         if batch_id:
             q["batch_id"] = str(batch_id)
 
@@ -98,41 +108,80 @@ class InterviewModel:
     # UPDATE
     # --------------------------------------------------
     @staticmethod
+    def update_by_id(interview_id: str, patch: Dict[str, Any]) -> bool:
+        """
+        Raw DB update by _id.
+        (Business rules must be validated in InterviewService.)
+        """
+        oid = InterviewModel._oid(interview_id)
+        if not oid:
+            return False
+
+        patch = dict(patch or {})
+        patch["updated_at"] = InterviewModel._now_utc()
+
+        try:
+            res = InterviewModel._db()[InterviewModel.COLLECTION].update_one(
+                {"_id": oid},
+                {"$set": patch}
+            )
+            return bool(res.modified_count)
+        except Exception:
+            return False
+
+    @staticmethod
     def mark_invites_sent(batch_id: str, date_iso: str, emails: List[str]) -> int:
         """
         Marks invite_sent=True for given candidate emails.
         Returns number of updated documents.
         """
+        emails = [e for e in (emails or []) if str(e).strip()]
         if not emails:
             return 0
 
-        res = InterviewModel._db()[InterviewModel.COLLECTION].update_many(
-            {"batch_id": str(batch_id), "date": date_iso, "candidate_email": {"$in": emails}},
-            {"$set": {"invite_sent": True, "invite_sent_at": datetime.now(timezone.utc)}}
-        )
-        return int(res.modified_count or 0)
+        now = InterviewModel._now_utc()
+        try:
+            res = InterviewModel._db()[InterviewModel.COLLECTION].update_many(
+                {"batch_id": str(batch_id), "date": str(date_iso), "candidate_email": {"$in": emails}},
+                {"$set": {"invite_sent": True, "invite_sent_at": now, "updated_at": now}}
+            )
+            return int(res.modified_count or 0)
+        except Exception:
+            return 0
 
     @staticmethod
     def update_meeting_link(batch_id: str, link: str) -> int:
-        """Updates meeting link for all interviews in a batch."""
-        res = InterviewModel._db()[InterviewModel.COLLECTION].update_many(
-            {"batch_id": str(batch_id)},
-            {"$set": {"meeting_link": link}}
-        )
-        return int(res.modified_count or 0)
+        """
+        Updates meeting_link for all interviews in a batch.
+        NOTE: Default meeting link for the batch (screening_batches.meeting_link_default)
+              should be handled in InterviewService or a Batch model, not here.
+        """
+        now = InterviewModel._now_utc()
+        try:
+            res = InterviewModel._db()[InterviewModel.COLLECTION].update_many(
+                {"batch_id": str(batch_id)},
+                {"$set": {"meeting_link": str(link or ""), "updated_at": now}}
+            )
+            return int(res.modified_count or 0)
+        except Exception:
+            return 0
 
     @staticmethod
     def cancel_interview(interview_id: str) -> bool:
-        """Soft delete (status = CANCELLED)."""
+        """Soft cancel (status = CANCELLED)."""
         oid = InterviewModel._oid(interview_id)
         if not oid:
             return False
 
-        res = InterviewModel._db()[InterviewModel.COLLECTION].update_one(
-            {"_id": oid},
-            {"$set": {"status": "CANCELLED", "cancelled_at": datetime.now(timezone.utc)}}
-        )
-        return (res.modified_count == 1)
+        now = InterviewModel._now_utc()
+        try:
+            res = InterviewModel._db()[InterviewModel.COLLECTION].update_one(
+                {"_id": oid},
+                {"$set": {"status": "CANCELLED", "cancelled_at": now, "updated_at": now}}
+            )
+            return (res.modified_count == 1)
+        except Exception:
+            return False
 
     # --------------------------------------------------
     # DELETE (rarely used)
@@ -140,22 +189,31 @@ class InterviewModel:
     @staticmethod
     def delete_by_batch(batch_id: str) -> int:
         """Deletes all interviews under a batch. Useful if batch is reset."""
-        res = InterviewModel._db()[InterviewModel.COLLECTION].delete_many({"batch_id": str(batch_id)})
-        return int(res.deleted_count or 0)
+        try:
+            res = InterviewModel._db()[InterviewModel.COLLECTION].delete_many({"batch_id": str(batch_id)})
+            return int(res.deleted_count or 0)
+        except Exception:
+            return 0
 
     # --------------------------------------------------
     # STATS / COUNTS
     # --------------------------------------------------
     @staticmethod
     def count_by_batch(batch_id: str) -> int:
-        return int(
-            InterviewModel._db()[InterviewModel.COLLECTION].count_documents({"batch_id": str(batch_id)}) or 0
-        )
+        try:
+            return int(
+                InterviewModel._db()[InterviewModel.COLLECTION].count_documents({"batch_id": str(batch_id)}) or 0
+            )
+        except Exception:
+            return 0
 
     @staticmethod
     def count_by_batch_and_date(batch_id: str, date_iso: str) -> int:
-        return int(
-            InterviewModel._db()[InterviewModel.COLLECTION].count_documents(
-                {"batch_id": str(batch_id), "date": date_iso}
-            ) or 0
-        )
+        try:
+            return int(
+                InterviewModel._db()[InterviewModel.COLLECTION].count_documents(
+                    {"batch_id": str(batch_id), "date": str(date_iso)}
+                ) or 0
+            )
+        except Exception:
+            return 0

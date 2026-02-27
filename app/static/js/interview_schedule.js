@@ -1,11 +1,18 @@
 /* static/js/interview_schedule.js
-   Cleaned + aligned with backend.
+   Cleaned + aligned with backend + "remaining_to_schedule" lock.
 
-   Fixes:
-   - Uses GET /interview/api/batch_interviews (matches Flask).
-   - Uses existing Meeting Modal from schedule.html (no duplicate DOM / no injected CSS).
-   - Meeting Link button no longer reloads day slots (prevents wiping UI state).
-   - ✅ UPDATED: "Send Emails" opens mail.html popup (small window) instead of POST /send_invites.
+   ✅ Uses:
+   - GET  /interview/api/batch_interviews?batch_id=...
+   - GET  /interview/api/day_slots?batch_id=...&date=...&duration=...&tz=...
+   - POST /interview/api/schedule
+
+   ✅ Uses existing Meeting Modal from schedule.html (no extra DOM/CSS injection)
+
+   ✅ NEW (based on latest controller/service/template changes):
+   - Reads ctx.remainingToSchedule / ctx.isLocked and disables scheduling UI when 0
+   - Reads API remaining_to_schedule and updates UI counters live
+   - After confirming slots, recalculates remaining and locks UI when it hits 0
+   - Does NOT create any global duplicate sendEmails() functions
 */
 
 (function () {
@@ -34,6 +41,8 @@
     sendEmailsBtn: document.getElementById("sendEmailsBtn"),
 
     totalShortlisted: document.getElementById("totalShortlisted"),
+    totalScheduled: document.getElementById("totalScheduled"),
+    remainingToSchedule: document.getElementById("remainingToSchedule"),
     activeVacancyName: document.getElementById("activeVacancyName"),
 
     // existing modal in schedule.html
@@ -46,16 +55,30 @@
   const state = {
     viewDate: null,
     selectedDate: null,
+
     selectedSlotKeys: new Set(),
     daySlots: [],
     bookedSet: new Set(),
+    lastDayInterviews: [],
+
     meetingLink: initialMeetingLink || "",
     planned: [],
 
     scheduledCandidateIds: new Set(),
     remainingCandidates: [],
-    lastDayInterviews: [],
+
+    // NEW: counts + lock
+    totalShortlisted: Number(ctx.totalShortlisted || allCandidates.length || 0),
+    totalScheduled: Number(ctx.totalScheduled || 0),
+    remainingToSchedule: Number(ctx.remainingToSchedule ?? ctx.remainingToSchedule === 0 ? ctx.remainingToSchedule : (ctx.remainingToSchedule)),
+    isLocked: Boolean(ctx.isLocked),
   };
+
+  // if remainingToSchedule not provided, derive best effort
+  if (Number.isNaN(state.remainingToSchedule) || state.remainingToSchedule === undefined || state.remainingToSchedule === null) {
+    state.remainingToSchedule = Math.max(0, state.totalShortlisted - state.totalScheduled);
+  }
+  state.isLocked = state.isLocked || state.remainingToSchedule <= 0;
 
   const pad = (n) => String(n).padStart(2, "0");
 
@@ -116,6 +139,55 @@
 
   function setMeetingLink(link) {
     state.meetingLink = link || "";
+    try {
+      window.__SCHEDULE_CTX__ = window.__SCHEDULE_CTX__ || {};
+      window.__SCHEDULE_CTX__.meetingLink = state.meetingLink;
+    } catch {}
+  }
+
+  function setSelectedDateInCtx(iso) {
+    try {
+      window.__SCHEDULE_CTX__ = window.__SCHEDULE_CTX__ || {};
+      window.__SCHEDULE_CTX__.selectedDate = iso;
+    } catch {}
+  }
+
+  function updateCountsUI() {
+    if (el.totalShortlisted) el.totalShortlisted.textContent = String(state.totalShortlisted || 0);
+    if (el.totalScheduled) el.totalScheduled.textContent = String(state.totalScheduled || 0);
+    if (el.remainingToSchedule) el.remainingToSchedule.textContent = String(Math.max(0, state.remainingToSchedule || 0));
+  }
+
+  function applyLockUI(locked) {
+    state.isLocked = !!locked;
+
+    // keep ctx for popup opener in template
+    try {
+      window.__SCHEDULE_CTX__ = window.__SCHEDULE_CTX__ || {};
+      window.__SCHEDULE_CTX__.isLocked = state.isLocked;
+      window.__SCHEDULE_CTX__.remainingToSchedule = Math.max(0, state.remainingToSchedule || 0);
+      window.__SCHEDULE_CTX__.totalScheduled = state.totalScheduled || 0;
+      window.__SCHEDULE_CTX__.totalShortlisted = state.totalShortlisted || 0;
+    } catch {}
+
+    const disable = state.isLocked;
+
+    // hard disable buttons/selects
+    if (el.tzSelect) el.tzSelect.disabled = disable;
+    if (el.durationSelect) el.durationSelect.disabled = disable;
+    if (el.confirmSlotsBtn) el.confirmSlotsBtn.disabled = disable;
+    if (el.meetingLinkBtn) el.meetingLinkBtn.disabled = disable;
+    if (el.sendEmailsBtn) el.sendEmailsBtn.disabled = disable;
+
+    // prevent slot picking
+    if (el.slotsList) {
+      if (disable) {
+        el.slotsList.classList.add("is-disabled");
+        el.slotsList.innerHTML = `<div class="slot-skeleton">All shortlisted candidates are already scheduled.</div>`;
+      } else {
+        el.slotsList.classList.remove("is-disabled");
+      }
+    }
   }
 
   function toast(msg, type = "info") {
@@ -185,7 +257,6 @@
   // ---- Calendar Rendering ----
   function renderCalendar() {
     if (!el.grid || !el.monthLabel) return;
-
     const d = state.viewDate;
     const year = d.getFullYear();
     const month = d.getMonth();
@@ -268,21 +339,47 @@
     return `${pad(hh)}:${pad(m)} ${ampm}`;
   }
 
+  function getCandidateName(c) {
+    return c?.name || c?.candidate_name || c?.full_name || c?.candidate || "Candidate";
+  }
+  function getCandidateEmail(c) {
+    return c?.email || c?.candidate_email || c?.mail || "";
+  }
+  function getCandidateId(c) {
+    return c?._id || c?.id || c?.candidate_id || null;
+  }
+
   async function refreshBatchScheduledCandidates() {
     const batchId = getActiveBatchId();
     if (!batchId) {
       state.scheduledCandidateIds = new Set();
       state.remainingCandidates = [...allCandidates];
+      state.totalShortlisted = allCandidates.length;
+      state.totalScheduled = 0;
+      state.remainingToSchedule = Math.max(0, state.totalShortlisted - state.totalScheduled);
+      updateCountsUI();
+      applyLockUI(state.remainingToSchedule <= 0);
       return;
     }
 
     try {
-      // ✅ fixed endpoint
       const data = await getJSON(`/interview/api/batch_interviews?batch_id=${encodeURIComponent(batchId)}`);
+
       const arr = Array.isArray(data.scheduled_candidate_ids) ? data.scheduled_candidate_ids : [];
       state.scheduledCandidateIds = new Set(arr.map((x) => String(x)));
+
+      // ✅ NEW: update counts from backend if provided
+      if (typeof data.total_shortlisted === "number") state.totalShortlisted = data.total_shortlisted;
+      if (typeof data.interviews_scheduled === "number") state.totalScheduled = data.interviews_scheduled;
+      if (typeof data.remaining_to_schedule === "number") state.remainingToSchedule = data.remaining_to_schedule;
+      else state.remainingToSchedule = Math.max(0, state.totalShortlisted - state.totalScheduled);
+
     } catch {
+      // fallback only
       state.scheduledCandidateIds = new Set();
+      state.totalShortlisted = allCandidates.length;
+      state.totalScheduled = 0;
+      state.remainingToSchedule = Math.max(0, state.totalShortlisted - state.totalScheduled);
     }
 
     state.remainingCandidates = allCandidates.filter((c) => {
@@ -290,6 +387,9 @@
       if (!cid) return true;
       return !state.scheduledCandidateIds.has(String(cid));
     });
+
+    updateCountsUI();
+    applyLockUI(state.remainingToSchedule <= 0);
   }
 
   async function loadDaySlots() {
@@ -308,6 +408,12 @@
 
     await refreshBatchScheduledCandidates();
 
+    // If locked, do not fetch slots / do not allow selection
+    if (state.isLocked) {
+      applyLockUI(true);
+      return;
+    }
+
     const dateISO = toISODate(state.selectedDate);
     const tz = el.tzSelect?.value || "Asia/Colombo";
     const duration = Number(el.durationSelect?.value || 10);
@@ -325,6 +431,16 @@
 
     try {
       const data = await getJSON(url);
+
+      // ✅ NEW: sync counts from backend response
+      if (typeof data.total_shortlisted === "number") state.totalShortlisted = data.total_shortlisted;
+      if (typeof data.interviews_scheduled === "number") state.totalScheduled = data.interviews_scheduled;
+      if (typeof data.remaining_to_schedule === "number") state.remainingToSchedule = data.remaining_to_schedule;
+      else state.remainingToSchedule = Math.max(0, state.totalShortlisted - state.totalScheduled);
+
+      updateCountsUI();
+      applyLockUI(state.remainingToSchedule <= 0);
+      if (state.isLocked) return; // lock immediately if backend says so
 
       if (Array.isArray(data.booked)) data.booked.forEach((k) => state.bookedSet.add(String(k)));
       if (Array.isArray(data.interviews)) state.lastDayInterviews = data.interviews;
@@ -346,6 +462,7 @@
       }
 
       if (data.meeting_link) setMeetingLink(data.meeting_link);
+
     } catch (e) {
       state.daySlots = [];
       toast(e.message || "Failed to load day slots.", "err");
@@ -359,6 +476,12 @@
 
     el.slotsDayLabel.textContent = fmtDayLabel(state.selectedDate);
 
+    if (state.isLocked) {
+      applyLockUI(true);
+      return;
+    }
+
+    // We limit selection by remaining candidates (which is the real meaning you wanted)
     const maxPick = Math.max(0, state.remainingCandidates.length);
     const pickedCount = state.selectedSlotKeys.size;
 
@@ -396,6 +519,12 @@
 
     el.slotsList.querySelectorAll('input[name="slotPick"]').forEach((chk) => {
       chk.addEventListener("change", () => {
+        if (state.isLocked) {
+          chk.checked = false;
+          toast("All shortlisted candidates are already scheduled.", "warn");
+          return;
+        }
+
         const key = chk.value;
 
         if (chk.checked) {
@@ -420,12 +549,8 @@
     }
 
     state.selectedDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
-
-    // ✅ keep window.__SCHEDULE_CTX__.selectedDate updated for popup usage
-    try {
-      window.__SCHEDULE_CTX__ = window.__SCHEDULE_CTX__ || {};
-      window.__SCHEDULE_CTX__.selectedDate = toISODate(state.selectedDate);
-    } catch {}
+    const iso = toISODate(state.selectedDate);
+    setSelectedDateInCtx(iso);
 
     if (!keepMonth) {
       state.viewDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1);
@@ -448,13 +573,6 @@
     const token = uuidToken().slice(0, 8);
     const link = `https://meet.hirenext.ai/${encodeURIComponent(batchName)}-${dateISO}-${token}`;
     setMeetingLink(link);
-
-    // ✅ keep ctx meetingLink updated for popup usage
-    try {
-      window.__SCHEDULE_CTX__ = window.__SCHEDULE_CTX__ || {};
-      window.__SCHEDULE_CTX__.meetingLink = link;
-    } catch {}
-
     return link;
   }
 
@@ -467,16 +585,6 @@
       start_time: `${dateISO}T${startHHMM}:00`,
       end_time: `${dateISO}T${endHHMM}:00`,
     };
-  }
-
-  function getCandidateName(c) {
-    return c?.name || c?.candidate_name || c?.full_name || c?.candidate || "Candidate";
-  }
-  function getCandidateEmail(c) {
-    return c?.email || c?.candidate_email || c?.mail || "";
-  }
-  function getCandidateId(c) {
-    return c?._id || c?.id || c?.candidate_id || null;
   }
 
   // ---- Meeting Modal (use existing HTML modal) ----
@@ -537,18 +645,26 @@
   }
 
   async function onMeetingLinkClick() {
+    if (state.isLocked) return toast("All shortlisted candidates are already scheduled.", "warn");
     if (!state.selectedDate) return toast("Select a weekday date first.", "warn");
 
     const batchId = getActiveBatchId();
     if (!batchId) return toast("Select a vacancy batch first.", "warn");
 
-    const selectedKeys = Array.from(state.selectedSlotKeys).sort((a, b) => mins(a.split("-")[0]) - mins(b.split("-")[0]));
+    const selectedKeys = Array.from(state.selectedSlotKeys).sort(
+      (a, b) => mins(a.split("-")[0]) - mins(b.split("-")[0])
+    );
 
     // if slots selected -> preview for remaining candidates
     if (selectedKeys.length > 0) {
       await refreshBatchScheduledCandidates();
 
-      if (state.remainingCandidates.length === 0) return toast("All candidates already scheduled in this batch.", "warn");
+      if (state.remainingCandidates.length === 0) {
+        state.remainingToSchedule = 0;
+        updateCountsUI();
+        applyLockUI(true);
+        return toast("All candidates already scheduled in this batch.", "warn");
+      }
       if (selectedKeys.length > state.remainingCandidates.length) {
         return toast(`Too many slots selected. Remaining candidates: ${state.remainingCandidates.length}`, "warn");
       }
@@ -599,13 +715,20 @@
   }
 
   async function confirmSlots() {
+    if (state.isLocked) return toast("All shortlisted candidates are already scheduled.", "warn");
+
     const batchId = getActiveBatchId();
     if (!batchId) return toast("No active batch selected.", "warn");
     if (!state.selectedDate) return toast("Select a weekday date.", "warn");
     if (!allCandidates.length) return toast("No shortlisted candidates.", "warn");
 
     await refreshBatchScheduledCandidates();
-    if (state.remainingCandidates.length === 0) return toast("All candidates already scheduled for this batch.", "warn");
+    if (state.remainingCandidates.length === 0) {
+      state.remainingToSchedule = 0;
+      updateCountsUI();
+      applyLockUI(true);
+      return toast("All candidates already scheduled for this batch.", "warn");
+    }
 
     const dateISO = toISODate(state.selectedDate);
     const tz = el.tzSelect?.value || "Asia/Colombo";
@@ -651,30 +774,51 @@
 
       toast(out.message || "Slots confirmed & saved.", "ok");
 
+      // optimistic count update (backend will also enforce)
+      state.totalScheduled = (state.totalScheduled || 0) + plan.length;
+      state.remainingToSchedule = Math.max(0, (state.totalShortlisted || 0) - (state.totalScheduled || 0));
+      updateCountsUI();
+
       plan.forEach((p) => { if (p.candidate_id) state.scheduledCandidateIds.add(String(p.candidate_id)); });
       plan.forEach((p) => state.bookedSet.add(`${p.start_label}-${p.end_label}`));
 
       state.selectedSlotKeys.clear();
 
+      // refresh from server (true source of truth)
       await refreshBatchScheduledCandidates();
+
+      // lock if remaining is 0 after scheduling
+      if (state.remainingToSchedule <= 0) {
+        applyLockUI(true);
+        return;
+      }
+
       await loadDaySlots();
       renderSlots();
+
     } catch (e) {
       toast(e.message || "Failed to save schedule.", "err");
     } finally {
-      if (el.confirmSlotsBtn) el.confirmSlotsBtn.disabled = false;
+      // keep disabled if locked
+      if (el.confirmSlotsBtn) el.confirmSlotsBtn.disabled = state.isLocked;
     }
   }
 
-  // ✅ UPDATED: open mail.html popup
-  function sendEmails() {
+  // ✅ UPDATED: email popup
+  function sendEmailsPopup() {
+    if (state.isLocked) return toast("All shortlisted candidates are already scheduled.", "warn");
     if (!state.selectedDate) return toast("Select a date first.", "warn");
+
+    // Prefer template-defined openMailPopup() if exists
+    if (typeof window.openMailPopup === "function") {
+      window.openMailPopup();
+      return;
+    }
 
     const dateISO = toISODate(state.selectedDate);
     const link = (state.meetingLink || "").trim();
 
-    const url =
-      `/interview/mail?date=${encodeURIComponent(dateISO)}&link=${encodeURIComponent(link)}`;
+    const url = `/interview/mail?date=${encodeURIComponent(dateISO)}&link=${encodeURIComponent(link)}`;
 
     window.open(
       url,
@@ -713,20 +857,19 @@
     el.meetingLinkBtn?.addEventListener("click", onMeetingLinkClick);
     el.confirmSlotsBtn?.addEventListener("click", confirmSlots);
 
-    // ✅ UPDATED: popup mail.html
-    // NOTE: If your schedule.html already uses onclick="openMailPopup()",
-    // this still works fine; this listener is the fallback.
+    // If your HTML already uses onclick="openMailPopup()", this is just a fallback.
     el.sendEmailsBtn?.addEventListener("click", (e) => {
-      // avoid double actions if HTML onclick exists
       e.preventDefault();
-      sendEmails();
+      sendEmailsPopup();
     });
 
-    if (el.totalShortlisted) el.totalShortlisted.textContent = String(allCandidates.length);
     if (el.activeVacancyName) el.activeVacancyName.textContent = activeBatch?.job_title || "—";
 
     if (initialMeetingLink) setMeetingLink(initialMeetingLink);
     else regenerateMeetingLink();
+
+    updateCountsUI();
+    applyLockUI(state.remainingToSchedule <= 0);
 
     bindModalClose();
   }
@@ -746,27 +889,3 @@
 
   init();
 })();
-
-async function sendEmails() {
-  if (!state.selectedDate) {
-    return toast("Select a date first.", "warn");
-  }
-
-  const dateISO = toISODate(state.selectedDate);
-  const link = state.meetingLink || "";
-
-  const url =
-    `/interview/mail?meeting_date=${encodeURIComponent(dateISO)}&meeting_link=${encodeURIComponent(link)}`;
-
-  // ✅ Centered popup window
-  const w = 560;
-  const h = 460;
-  const left = Math.round((window.screen.width - w) / 2);
-  const top  = Math.round((window.screen.height - h) / 2);
-
-  window.open(
-    url,
-    "HireNextMailPopup",
-    `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`
-  );
-}
