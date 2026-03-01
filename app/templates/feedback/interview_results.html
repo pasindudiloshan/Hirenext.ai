@@ -1,0 +1,228 @@
+{# app/templates/feedback/interview_results.html #}
+{% extends "base.html" %}
+{% block title %}Interview Results{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1100px; padding: 24px 16px;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0;">Interview Results</h2>
+      <div style="color:#64748b; font-weight:700; margin-top:6px;">
+        Role: {{ doc.role or 'N/A' }} • Session: {{ doc.session_id or '' }}
+        {% if doc.status %}
+          • Status: <span style="font-weight:900;">{{ doc.status }}</span>
+        {% endif %}
+      </div>
+
+      {% if doc.candidate_name %}
+      <div style="color:#334155; margin-top:6px;">
+        Candidate: <b>{{ doc.candidate_name }}</b>
+        {% if doc.candidate_email %} • {{ doc.candidate_email }}{% endif %}
+      </div>
+      {% endif %}
+
+      <div style="color:#64748b; margin-top:6px; font-size:13px;">
+        {% if doc.created_at %}Created: {{ doc.created_at }}{% endif %}
+        {% if doc.completed_at %} • Completed: {{ doc.completed_at }}{% endif %}
+      </div>
+    </div>
+
+    <div style="padding:14px 16px; border:1px solid #e6e9f5; border-radius:14px; background:#fff; min-width:220px;">
+      <div style="font-size:12px; color:#64748b; font-weight:800;">FINAL SCORE</div>
+      <div style="font-size:28px; font-weight:900; color:#0f172a;">
+        {{ final_score }}/10
+      </div>
+      {% set answers = doc.answers or [] %}
+      {% if answers|length > 0 %}
+        <div style="margin-top:6px; font-size:12px; color:#64748b; font-weight:700;">
+          Questions answered: {{ answers|length }}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="height:16px;"></div>
+
+  {% set answers = doc.answers or [] %}
+  {% if answers|length == 0 %}
+    <div style="border:1px solid #e6e9f5; border-radius:14px; padding:18px; background:#fff;">
+      <b>No answers saved yet.</b>
+      <div style="color:#64748b; margin-top:8px;">
+        Ask the candidate to complete at least one question, then come back here.
+      </div>
+    </div>
+  {% else %}
+
+    {# ---- Quick Summary Chips ---- #}
+    {% set concept_ok = (answers | selectattr('concept_correct') | list | length) %}
+    {% set total = answers|length %}
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+      <div style="padding:10px 12px; border:1px solid #e6e9f5; border-radius:999px; background:#fff; font-weight:800; color:#0f172a;">
+        ✅ Concept OK: {{ concept_ok }}/{{ total }}
+      </div>
+      <div style="padding:10px 12px; border:1px solid #e6e9f5; border-radius:999px; background:#fff; font-weight:800; color:#0f172a;">
+        📊 Overall: {{ final_score }}/10
+      </div>
+    </div>
+
+    <div style="border:1px solid #e6e9f5; border-radius:14px; overflow:hidden; background:#fff;">
+      <div style="padding:14px 16px; font-weight:900; background:#f8fafc; border-bottom:1px solid #e6e9f5;">
+        Question Breakdown
+      </div>
+
+      <div style="overflow:auto;">
+        <table style="width:100%; border-collapse:collapse; min-width:1000px;">
+          <thead>
+            <tr style="text-align:left; background:#fff;">
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">#</th>
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">Question ID</th>
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">Rubric</th>
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">Concept</th>
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">Mode</th>
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">Final</th>
+              <th style="padding:12px 14px; border-bottom:1px solid #e6e9f5;">Feedback</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for a in answers %}
+            <tr>
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff; font-weight:800;">{{ loop.index }}</td>
+
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff; font-weight:800;">
+                {{ a.question_id or "—" }}
+              </td>
+
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff;">
+                {{ (a.rubric_score if a.rubric_score is not none else 0) }}/10
+              </td>
+
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff;">
+                {% if a.concept_correct %}✅{% else %}⚠️{% endif %}
+              </td>
+
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff;">
+                {% if a.mode_used %}
+                  <span style="font-weight:900;">{{ a.mode_used }}</span>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff; font-weight:900;">
+                {{ (a.final_score_0_10 if a.final_score_0_10 is not none else (a.rubric_score or 0)) }}/10
+              </td>
+
+              <td style="padding:12px 14px; border-bottom:1px solid #eef2ff; color:#334155;">
+                {{ a.feedback or "" }}
+              </td>
+            </tr>
+
+            {# ---- Transcript + Details Row ---- #}
+            {% set has_details = (a.transcript or (a.awarded_points and a.awarded_points|length) or (a.missed_points and a.missed_points|length) or (a.red_flags_triggered and a.red_flags_triggered|length) or a.model_label or a.model_quality or a.model_score_0_10 is not none or a.model_error) %}
+            {% if has_details %}
+            <tr>
+              <td></td>
+              <td colspan="6" style="padding:12px 14px; border-bottom:1px solid #eef2ff; background:#fbfdff;">
+
+                {% if a.transcript %}
+                <div style="font-size:12px; font-weight:900; color:#64748b;">TRANSCRIPT</div>
+                <div style="margin-top:6px; color:#0f172a; line-height:1.55;">
+                  {{ a.transcript }}
+                </div>
+                {% endif %}
+
+                <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
+                  {% if a.awarded_points and a.awarded_points|length > 0 %}
+                  <div style="min-width:260px; flex:1;">
+                    <div style="font-size:12px; font-weight:900; color:#16a34a;">✅ MATCHED POINTS</div>
+                    <ul style="margin:6px 0 0 18px; color:#0f172a;">
+                      {% for m in (a.awarded_points[:6] if a.awarded_points else []) %}
+                        <li>{{ m }}</li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% endif %}
+
+                  {% if a.missed_points and a.missed_points|length > 0 %}
+                  <div style="min-width:260px; flex:1;">
+                    <div style="font-size:12px; font-weight:900; color:#ef4444;">❌ MISSED POINTS</div>
+                    <ul style="margin:6px 0 0 18px; color:#0f172a;">
+                      {% for m in (a.missed_points[:6] if a.missed_points else []) %}
+                        <li>{{ m }}</li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% endif %}
+                </div>
+
+                {% if a.red_flags_triggered and a.red_flags_triggered|length > 0 %}
+                <div style="margin-top:12px;">
+                  <div style="font-size:12px; font-weight:900; color:#b91c1c;">🚩 RED FLAGS</div>
+                  <ul style="margin:6px 0 0 18px; color:#0f172a;">
+                    {% for rf in (a.red_flags_triggered[:6] if a.red_flags_triggered else []) %}
+                      <li>{{ rf }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+                {% endif %}
+
+                {% if a.model_label or a.model_quality or a.model_score_0_10 is not none or a.model_error %}
+                <div style="margin-top:12px;">
+                  <div style="font-size:12px; font-weight:900; color:#64748b;">OPTION B (MODEL)</div>
+                  <div style="margin-top:6px; color:#0f172a;">
+                    {% if a.model_label %}<b>Label:</b> {{ a.model_label }}{% endif %}
+                    {% if a.model_quality %} • <b>Quality:</b> {{ a.model_quality }}{% endif %}
+                    {% if a.model_score_0_10 is not none %} • <b>Score:</b> {{ a.model_score_0_10 }}/10{% endif %}
+                  </div>
+                  {% if a.model_error %}
+                    <div style="margin-top:6px; color:#b91c1c; font-size:12px;">
+                      Model error: {{ a.model_error }}
+                    </div>
+                  {% endif %}
+                </div>
+                {% endif %}
+
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="height:16px;"></div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a href="/interview/calander" class="btn btn-primary" style="text-decoration:none;">
+        Back to Calendar
+      </a>
+
+      <a href="/interview/meeting/{{ doc.interview_id or doc.session_id }}" class="btn btn-outline" style="text-decoration:none;">
+        View Meeting Slot
+      </a>
+
+      <button class="btn btn-outline" type="button" onclick="downloadJson()">Download JSON</button>
+    </div>
+
+    <script>
+      function downloadJson() {
+        const data = {{ doc|tojson }};
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "interview_results_{{ (doc.session_id or 'session')|replace('/','_')|replace(' ','_') }}.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      }
+    </script>
+
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,245 @@
+{
+  "Senior Accountant": [
+    {
+      "id": "SA_Q1",
+      "skill": "Financial Reporting",
+      "difficulty": "medium",
+      "question": "Explain accrual accounting versus cash accounting.",
+      "rubric": [
+        { "point": "Accrual records revenue and expenses when earned or incurred", "score": 4 },
+        { "point": "Cash accounting records transactions when cash is received or paid", "score": 3 },
+        { "point": "Accrual provides better matching of revenue and expenses", "score": 3 }
+      ],
+      "correctness": {
+        "enabled": true,
+        "required_concepts": [
+          { "concept": "accrual timing", "synonyms": ["earned", "incurred", "recognize when earned"] },
+          { "concept": "cash timing", "synonyms": ["when paid", "when received", "cash basis"] }
+        ],
+        "min_concepts": 2,
+        "bert_threshold": 0.6,
+        "red_flags": ["accrual and cash are same", "accrual means when cash is received"]
+      }
+    },
+    {
+      "id": "SA_Q2",
+      "skill": "Internal Controls",
+      "difficulty": "medium",
+      "question": "What are internal controls and why are they important?",
+      "rubric": [
+        { "point": "Policies and procedures to safeguard assets", "score": 4 },
+        { "point": "Ensure accuracy of financial reporting", "score": 3 },
+        { "point": "Prevent fraud and errors", "score": 3 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q3",
+      "skill": "Financial Statements",
+      "difficulty": "medium",
+      "question": "Describe the three main financial statements.",
+      "rubric": [
+        { "point": "Income Statement", "score": 3 },
+        { "point": "Balance Sheet", "score": 3 },
+        { "point": "Cash Flow Statement", "score": 4 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q4",
+      "skill": "Audit",
+      "difficulty": "hard",
+      "question": "What is materiality in auditing?",
+      "rubric": [
+        { "point": "Threshold for significance of misstatements", "score": 4 },
+        { "point": "Impacts decision making of users", "score": 3 },
+        { "point": "Determined by professional judgment", "score": 3 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q5",
+      "skill": "Taxation",
+      "difficulty": "medium",
+      "question": "What is deferred tax?",
+      "rubric": [
+        { "point": "Difference between accounting income and taxable income", "score": 4 },
+        { "point": "Temporary timing differences", "score": 3 },
+        { "point": "Creates deferred tax asset or liability", "score": 3 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q6",
+      "skill": "Cost Accounting",
+      "difficulty": "medium",
+      "question": "Explain fixed cost and variable cost.",
+      "rubric": [
+        { "point": "Fixed costs do not change with production volume", "score": 5 },
+        { "point": "Variable costs change with output level", "score": 5 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q7",
+      "skill": "Revenue Recognition",
+      "difficulty": "hard",
+      "question": "When should revenue be recognized?",
+      "rubric": [
+        { "point": "When performance obligation is satisfied", "score": 5 },
+        { "point": "When control of goods/services transfers", "score": 5 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q8",
+      "skill": "Budgeting",
+      "difficulty": "medium",
+      "question": "What is variance analysis?",
+      "rubric": [
+        { "point": "Comparison between actual and budgeted results", "score": 6 },
+        { "point": "Identify favorable and unfavorable variances", "score": 4 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q9",
+      "skill": "Depreciation",
+      "difficulty": "medium",
+      "question": "What are common depreciation methods?",
+      "rubric": [
+        { "point": "Straight-line method", "score": 5 },
+        { "point": "Reducing balance or declining balance method", "score": 5 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "SA_Q10",
+      "skill": "Working Capital",
+      "difficulty": "medium",
+      "question": "What is working capital?",
+      "rubric": [
+        { "point": "Current assets minus current liabilities", "score": 6 },
+        { "point": "Measures short-term liquidity", "score": 4 }
+      ],
+      "correctness": { "enabled": true, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    }
+  ],
+
+  "HR Generalist": [
+    {
+      "id": "HR_Q1",
+      "skill": "Recruitment",
+      "difficulty": "medium",
+      "question": "Describe the recruitment process.",
+      "rubric": [
+        { "point": "Job analysis and job posting", "score": 3 },
+        { "point": "Screening and interviewing candidates", "score": 4 },
+        { "point": "Selection and onboarding", "score": 3 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q2",
+      "skill": "Performance Management",
+      "difficulty": "medium",
+      "question": "What is performance appraisal?",
+      "rubric": [
+        { "point": "Systematic evaluation of employee performance", "score": 5 },
+        { "point": "Used for feedback and development", "score": 5 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q3",
+      "skill": "Employee Relations",
+      "difficulty": "medium",
+      "question": "How would you handle workplace conflict?",
+      "rubric": [
+        { "point": "Listen to both parties", "score": 4 },
+        { "point": "Remain neutral and objective", "score": 3 },
+        { "point": "Facilitate resolution and follow-up", "score": 3 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q4",
+      "skill": "Compensation",
+      "difficulty": "medium",
+      "question": "What factors influence compensation structure?",
+      "rubric": [
+        { "point": "Market rates", "score": 4 },
+        { "point": "Job role and responsibility", "score": 3 },
+        { "point": "Company budget and policy", "score": 3 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q5",
+      "skill": "Training",
+      "difficulty": "medium",
+      "question": "Why is employee training important?",
+      "rubric": [
+        { "point": "Improves skills and productivity", "score": 5 },
+        { "point": "Enhances employee engagement and retention", "score": 5 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q6",
+      "skill": "Labor Law",
+      "difficulty": "medium",
+      "question": "What is the importance of labor law compliance?",
+      "rubric": [
+        { "point": "Avoid legal penalties", "score": 5 },
+        { "point": "Protect employee rights", "score": 5 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q7",
+      "skill": "Onboarding",
+      "difficulty": "easy",
+      "question": "What makes an effective onboarding process?",
+      "rubric": [
+        { "point": "Clear communication of expectations", "score": 5 },
+        { "point": "Support and integration into company culture", "score": 5 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q8",
+      "skill": "Engagement",
+      "difficulty": "medium",
+      "question": "How do you improve employee engagement?",
+      "rubric": [
+        { "point": "Recognition and feedback", "score": 5 },
+        { "point": "Career development opportunities", "score": 5 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q9",
+      "skill": "HR Metrics",
+      "difficulty": "medium",
+      "question": "What are important HR KPIs?",
+      "rubric": [
+        { "point": "Turnover rate", "score": 4 },
+        { "point": "Time to hire", "score": 3 },
+        { "point": "Employee satisfaction", "score": 3 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    },
+    {
+      "id": "HR_Q10",
+      "skill": "Diversity & Inclusion",
+      "difficulty": "medium",
+      "question": "Why is diversity important in the workplace?",
+      "rubric": [
+        { "point": "Encourages innovation and different perspectives", "score": 5 },
+        { "point": "Promotes fairness and equal opportunity", "score": 5 }
+      ],
+      "correctness": { "enabled": false, "required_concepts": [], "min_concepts": 0, "bert_threshold": 0.6, "red_flags": [] }
+    }
+  ]
+}

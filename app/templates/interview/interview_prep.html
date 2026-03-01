@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Waiting Lobby</title>
+
+  <!-- Font Awesome (CDN) -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <link rel="stylesheet" href="/app/static/css/interview_prep.css" />
+</head>
+<body>
+
+  <div class="lp-overlay" role="dialog" aria-modal="true" aria-label="Waiting lobby">
+    <div class="lp-modal">
+
+      <!-- top row (only close button) -->
+      <div class="lp-top">
+        <button class="lp-close" id="btnClose" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- message -->
+      <div class="lp-header">
+        <h1>Someone in the meeting should let you in soon.</h1>
+        <p>Choose your audio and video settings</p>
+      </div>
+
+      <div class="lp-grid">
+        <!-- left: video preview -->
+        <div class="lp-preview">
+          <div class="lp-video">
+            <!-- If you want: replace this with a real <video> element later -->
+            <div class="lp-camera-badge" id="camBadge">Camera On</div>
+          </div>
+
+          <div class="lp-preview-controls">
+            <button class="lp-pill" id="btnCam" type="button" aria-pressed="true">
+              <i class="fa-solid fa-video"></i>
+              <span>Camera</span>
+              <span class="lp-switch on" id="camSwitch"></span>
+            </button>
+
+            <button class="lp-pill" id="btnMic" type="button" aria-pressed="true">
+              <i class="fa-solid fa-microphone"></i>
+              <span>Mic</span>
+              <span class="lp-switch on" id="micSwitch"></span>
+            </button>
+
+            <button class="lp-gear" type="button" aria-label="Settings">
+              <i class="fa-solid fa-gear"></i>
+            </button>
+          </div>
+
+          <label class="lp-filter">
+            <input type="checkbox" id="bgFilters" />
+            Background filters
+          </label>
+        </div>
+
+        <!-- right: audio panel -->
+        <div class="lp-panel">
+          <button class="lp-row selected" type="button" data-audio="computer">
+            <div class="lp-row-left">
+              <i class="fa-solid fa-desktop"></i>
+              <div>
+                <div class="lp-row-title">Computer audio</div>
+                <div class="lp-row-sub">Custom setup</div>
+              </div>
+            </div>
+            <div class="lp-row-right">
+              <span class="lp-check"><i class="fa-solid fa-check"></i></span>
+            </div>
+          </button>
+
+          <div class="lp-sliders">
+            <div class="lp-slider">
+              <i class="fa-solid fa-microphone"></i>
+              <input type="range" min="0" max="100" value="70" id="micVol">
+            </div>
+            <div class="lp-slider">
+              <i class="fa-solid fa-volume-high"></i>
+              <input type="range" min="0" max="100" value="55" id="spkVol">
+            </div>
+          </div>
+
+          <button class="lp-row" type="button" data-audio="phone">
+            <div class="lp-row-left">
+              <i class="fa-solid fa-phone"></i>
+              <div class="lp-row-title">Phone audio</div>
+            </div>
+            <div class="lp-row-right">
+              <span class="lp-radio"></span>
+            </div>
+          </button>
+
+          <button class="lp-row" type="button" data-audio="room">
+            <div class="lp-row-left">
+              <i class="fa-solid fa-building"></i>
+              <div class="lp-row-title">Room audio</div>
+            </div>
+            <div class="lp-row-right">
+              <span class="lp-radio"></span>
+            </div>
+          </button>
+
+          <button class="lp-row" type="button" data-audio="none">
+            <div class="lp-row-left">
+              <i class="fa-solid fa-volume-xmark"></i>
+              <div class="lp-row-title">Don’t use audio</div>
+            </div>
+            <div class="lp-row-right">
+              <span class="lp-radio"></span>
+            </div>
+          </button>
+
+          <div class="lp-actions">
+            <button class="lp-btn ghost" id="btnCancel" type="button">Cancel</button>
+            <button class="lp-btn primary" id="btnJoin" type="button">Join now</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/app/static/js/interview_prep.js"></script>
+</body>
+</html>

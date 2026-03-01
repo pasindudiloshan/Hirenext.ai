@@ -1,0 +1,112 @@
+{# templates/interview/interview.html — FINAL UI ✅
+   - Spinner inside AI panel (replaces transcript label)
+   - Optional transcript div (hidden by default)
+   - Minimal question panel + big FontAwesome mic button
+#}
+{% extends "base.html" %}
+{% block title %}AI Interview Session{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/interview.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="iv-page iv-clean">
+
+  <!-- TOP MINI BAR (REC + TIMER ONLY) -->
+  <div class="iv-topbar">
+    <div class="iv-pill" id="ivRecPill">
+      <span class="iv-dot" id="ivRecDot"></span>
+      <span id="ivRecText">REC OFF</span>
+    </div>
+    <div class="iv-timer" id="ivTimer">00:00</div>
+  </div>
+
+  <!-- TWO HUGE SCREENS -->
+  <section class="iv-stage">
+    <!-- LEFT: AI -->
+    <div class="iv-screen iv-screen-ai">
+      <div class="iv-ai-wrap">
+        <div class="iv-ai-ring" id="aiRing"></div>
+
+        <!-- centered mic icon (AI) -->
+        <i class="fa-solid fa-microphone iv-fa-mic"></i>
+
+<div class="iv-ai-status" id="aiStatus">
+  <div class="iv-dots" id="aiDots" aria-label="AI is processing">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: CANDIDATE -->
+    <div class="iv-screen iv-screen-user">
+      <video id="candidateVideo" autoplay playsinline muted></video>
+
+      <div class="iv-video-overlay" id="videoOverlay">
+        <div class="iv-overlay-card">
+          <div class="iv-overlay-title">Camera is off</div>
+          <div class="iv-overlay-sub">Tap the camera button below to enable.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ✅ MINIMAL QUESTION PANEL -->
+  <section class="iv-qpanel iv-qpanel-min">
+    <div class="iv-qmeta" id="qMeta">Loading...</div>
+    <div class="iv-qtext" id="qText">Loading question...</div>
+
+    <div class="iv-qactions iv-qactions-min">
+      <!-- BIG RECORD BUTTON -->
+      <button class="iv-rec-big" id="btnRecAns" type="button" title="Record Answer">
+        <i class="fa-solid fa-microphone"></i>
+      </button>
+    </div>
+
+  </section>
+
+  <!-- BOTTOM DOCK (VIDEO / MIC / SCREEN-RECORD / END) -->
+  <div class="iv-dock-lite">
+    <button class="iv-dock-btn-lite" id="btnToggleCam" type="button" title="Camera">
+      <i class="fa-solid fa-video"></i>
+    </button>
+
+    <button class="iv-dock-btn-lite" id="btnToggleMic" type="button" title="Mic">
+      <i class="fa-solid fa-microphone"></i>
+    </button>
+
+    <!-- optional screen record -->
+    <button class="iv-dock-btn-lite iv-record" id="btnRecord" type="button" title="Screen Record (optional)">
+      <i class="fa-solid fa-circle"></i>
+    </button>
+
+    <!-- End → Results -->
+    <a class="iv-dock-btn-lite iv-end" href="{{ end_url or results_url or '#' }}" title="End">
+      <i class="fa-solid fa-phone-slash"></i>
+    </a>
+  </div>
+
+</div>
+
+<script>
+  window.__INTERVIEW_CTX__ = {
+    interviewId: {{ (interview_id or "")|tojson }},
+    candidateName: {{ (candidate_name or "Candidate")|tojson }}
+  };
+
+  window.__INTERVIEW_AI_CTX__ = {
+    interviewId: {{ (interview_id or "")|tojson }},
+    sessionId: {{ (interview_id or "")|tojson }},
+    role: {{ (role or "")|tojson }},
+    questions: {{ (questions or [])|tojson }},
+    submitUrl: {{ (submit_url or "/interview-ai/submit-answer")|tojson }},
+    resultsUrl: {{ (results_url or "")|tojson }}
+  };
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/interview.js') }}"></script>
+{% endblock %}

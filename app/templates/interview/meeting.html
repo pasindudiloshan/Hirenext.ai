@@ -8,18 +8,25 @@
 
 {% block content %}
 <div class="mt-page">
+
+  <!-- ===== HERO ===== -->
   <section class="mt-hero">
     <div class="mt-hero-left">
       <h1>Meeting Details</h1>
       <p class="mt-sub">View and modify a scheduled interview.</p>
     </div>
 
+    <!-- ✅ Top-right: JOIN button -->
     <div class="mt-hero-right">
-      <a class="mt-btn mt-btn-outline" href="/interview/calander">← Back to Calendar</a>
-      <button class="mt-btn mt-btn-danger" id="btnCancel" type="button">Cancel Interview</button>
+      <a class="mt-btn mt-btn-join"
+         id="btnJoinMeeting"
+         href="/interview/interview/{{ interview_id }}">
+        Join Meeting
+      </a>
     </div>
   </section>
 
+  <!-- ===== MAIN CARD ===== -->
   <section class="mt-card">
     <div class="mt-topbar">
       <div class="mt-pill" id="statusPill">Loading...</div>
@@ -27,8 +34,12 @@
     </div>
 
     <div class="mt-grid">
-      <!-- Left: Main form -->
-      <div class="mt-panel">
+
+      <!-- =========================
+           LEFT PANEL (EDIT)
+           ✅ Back button goes bottom-left inside this panel
+      ========================== -->
+      <div class="mt-panel mt-panel-edit">
         <h2 class="mt-h2">Edit</h2>
 
         <form id="meetingForm" class="mt-form" novalidate>
@@ -92,6 +103,7 @@
                       placeholder="Add notes (candidate, instructions, etc.)"></textarea>
           </label>
 
+          <!-- Save/Reload stay on the right like before -->
           <div class="mt-actions">
             <button class="mt-btn mt-btn-primary" id="btnSave" type="submit">
               Save Changes
@@ -103,10 +115,23 @@
 
           <div class="mt-alert" id="formAlert" style="display:none;"></div>
         </form>
+
+        <!-- ✅ Bottom-left button INSIDE left panel (your left circle) -->
+        <div class="mt-panel-corner mt-panel-corner-left">
+          <a class="mt-btn mt-btn-outline"
+             id="btnBackCal"
+             href="/interview/calander">
+            ← Back to Calendar
+          </a>
+        </div>
       </div>
 
-      <!-- Right: Read-only details -->
-      <div class="mt-panel mt-panel-right">
+
+      <!-- =========================
+           RIGHT PANEL (DETAILS)
+           ✅ Cancel button goes bottom-right inside this panel
+      ========================== -->
+      <div class="mt-panel mt-panel-right mt-panel-details">
         <h2 class="mt-h2">Details</h2>
 
         <div class="mt-kv">
@@ -151,9 +176,20 @@
         <div class="mt-mini mt-hint">
           Tip: Changing date/time/duration will auto-recompute start/end times on save.
         </div>
+
+        <!-- ✅ Bottom-right button INSIDE right panel (your right circle) -->
+        <div class="mt-panel-corner mt-panel-corner-right">
+          <button class="mt-btn mt-btn-danger"
+                  id="btnCancel"
+                  type="button">
+            Cancel Interview
+          </button>
+        </div>
       </div>
+
     </div>
   </section>
+
 </div>
 
 <script>

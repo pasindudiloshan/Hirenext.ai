@@ -1,3 +1,4 @@
+# app/controllers/interview_controller.py  ✅ FULLY UPDATED (without removing anything)
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -7,10 +8,11 @@ import smtplib
 from email.message import EmailMessage
 
 from bson import ObjectId
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request, url_for  # ✅ UPDATED
 
 from app.models.shortlisted_batch_model import ShortlistedBatchModel
 from app.services.interview_service import InterviewService
+from app.services.question_bank_service import QuestionBankService  # ✅ NEW
 
 interview_bp = Blueprint("interview_bp", __name__)
 
@@ -67,6 +69,17 @@ def _remaining(shortlisted_count: int, interviews_scheduled: int) -> int:
         return max(0, int(shortlisted_count) - int(interviews_scheduled))
     except Exception:
         return 0
+
+
+# ✅ Optional: normalize job titles so they match JSON role keys more often
+def _normalize_role(role: str) -> str:
+    role = (role or "").strip()
+    # common suffixes you might store in DB
+    for suffix in ("(Remote)", "(Onsite)", "(Hybrid)"):
+        role = role.replace(suffix, "")
+    # common separators
+    role = role.split(" - ")[0].strip()
+    return role
 
 
 # ============================================================
@@ -221,6 +234,99 @@ def meeting_page(interview_id: str):
 
 
 # ============================================================
+# ✅ UPDATED: Live Interview Session Page (Option A/B injection)
+# ============================================================
+
+@interview_bp.route("/interview/<interview_id>", methods=["GET"])
+def live_interview_page(interview_id: str):
+    """
+    Live AI interview session page
+    Template: templates/interview/interview.html
+    This route is used because meeting.html points to:
+      /interview/interview/<id>
+    """
+    db = _get_db()
+    oid = _oid(interview_id)
+
+    submit_url = url_for("interview_ai_bp.submit_answer")
+    results_url = url_for("interview_ai_bp.results", interview_id=str(interview_id))
+
+    if not oid:
+        # show page anyway but safe fallback
+        return render_template(
+            "interview/interview.html",
+            interview_id=str(interview_id),
+            candidate_name="Candidate",
+            role="",
+            questions=[],
+            submit_url=submit_url,
+            results_url=results_url,
+            end_url=results_url,
+        )
+
+    row = db.interviews.find_one({"_id": oid}) or {}
+
+    candidate_name = (
+        row.get("candidate_name")
+        or row.get("candidate")
+        or row.get("name")
+        or "Candidate"
+    )
+
+    # ✅ role from scheduled interview document
+    role_raw = (row.get("job_title") or row.get("role") or "").strip()
+    role = _normalize_role(role_raw)
+
+    # ✅ load question list for role
+    questions_full = QuestionBankService.get_questions_for_role(role) if role else []
+    questions: List[Dict[str, Any]] = []
+    for q in (questions_full or []):
+        if isinstance(q, dict):
+            questions.append({
+                "id": str(q.get("id", "")).strip(),
+                "skill": q.get("skill", ""),
+                "difficulty": q.get("difficulty", ""),
+                "question": q.get("question", ""),
+            })
+
+    # ✅ create attempt doc if missing (session_id == interview_id)
+    # ✅ UPDATED: use UPSERT (safe with unique index on session_id)
+    try:
+        db.interview_attempts.update_one(
+            {"session_id": str(interview_id)},
+            {"$setOnInsert": {
+                "session_id": str(interview_id),
+                "interview_id": str(interview_id),
+                "batch_id": row.get("batch_id"),
+                "candidate_id": row.get("candidate_id"),
+                "candidate_name": str(candidate_name),
+                "candidate_email": row.get("candidate_email") or row.get("email"),
+                "role": role,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "answers": [],
+                "final_score": None,
+                "summary": None,
+                "status": "IN_PROGRESS",
+            }},
+            upsert=True
+        )
+    except Exception:
+        # don't break the page if attempt creation fails
+        pass
+
+    return render_template(
+        "interview/interview.html",
+        interview_id=str(interview_id),
+        candidate_name=str(candidate_name),
+        role=role,
+        questions=questions,
+        submit_url=submit_url,
+        results_url=results_url,
+        end_url=results_url,
+    )
+
+
+# ============================================================
 # Mail popup page
 # ============================================================
 
@@ -366,7 +472,6 @@ def api_schedule():
     if not isinstance(interviews, list) or len(interviews) == 0:
         return jsonify({"ok": False, "error": "No interviews provided"}), 400
 
-    # ✅ Important: service will also block when remaining_to_schedule == 0
     result = InterviewService.save_confirmed_interviews(
         batch_doc=batch,
         date_iso=date_iso,
@@ -388,10 +493,6 @@ def api_schedule():
 
 @interview_bp.route("/api/send_invites", methods=["POST"])
 def api_send_invites():
-    """
-    Existing endpoint: currently just marks invites as sent in DB.
-    (You can keep it, and use manual popup for actual sending.)
-    """
     db = _get_db()
 
     data = request.get_json(silent=True) or {}
@@ -449,10 +550,6 @@ def api_calendar_events():
 
 @interview_bp.route("/api/send_manual_email", methods=["POST"])
 def send_manual_email():
-    """
-    Sends an email to a candidate using Gmail SMTP (App Password).
-    Form POST from mail.html.
-    """
     to_email = (request.form.get("to_email") or "").strip()
     meeting_link = (request.form.get("meeting_link") or "").strip()
     meeting_date = (request.form.get("meeting_date") or "").strip()
@@ -563,7 +660,6 @@ def api_update_interview(interview_id: str):
         "tz",
     }
     clean_patch = {k: v for k, v in patch.items() if k in ALLOWED}
-
     clean_patch["updated_at"] = datetime.now(timezone.utc)
 
     result = InterviewService.update_interview(
@@ -574,7 +670,11 @@ def api_update_interview(interview_id: str):
     if not result.get("ok"):
         return jsonify({"ok": False, "error": result.get("error", "Update failed")}), 400
 
-    return jsonify({"ok": True, "message": "Interview updated.", "interview": _json_safe(result.get("interview"))})
+    return jsonify({
+        "ok": True,
+        "message": "Interview updated.",
+        "interview": _json_safe(result.get("interview"))
+    })
 
 
 @interview_bp.route("/api/interview/<interview_id>/cancel", methods=["POST"])
