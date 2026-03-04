@@ -23,37 +23,36 @@ def create_app():
     )
 
     # ------------------------
-    # AI Model Config (SBERT path optional)
+    # AI Model Config
     # ------------------------
-    # If you want to use local SBERT model folder:
-    # export SBERT_MODEL_PATH=app/data/ml_models/embedder_all_MiniLM_L6_v2
     app.config["SBERT_MODEL_PATH"] = (
         os.environ.get("SBERT_MODEL_PATH")
         or app.config.get("SBERT_MODEL_PATH")
     )
 
-    # Whisper model size (small | base | medium)
     app.config["WHISPER_MODEL_SIZE"] = (
         os.environ.get("WHISPER_MODEL_SIZE")
         or "small"
     )
 
-    # ✅ IMPORTANT: Map your config to the env var used by STTService
-    # STTService reads STT_WHISPER_MODEL, so keep them aligned.
-    os.environ.setdefault("STT_WHISPER_MODEL", str(app.config["WHISPER_MODEL_SIZE"]))
+    os.environ.setdefault(
+        "STT_WHISPER_MODEL",
+        str(app.config["WHISPER_MODEL_SIZE"])
+    )
 
-    # ✅ Optional: ensure SBERT env var exists for EvaluatorService (it reads env)
     if app.config.get("SBERT_MODEL_PATH"):
-        os.environ.setdefault("SBERT_MODEL_PATH", str(app.config["SBERT_MODEL_PATH"]))
+        os.environ.setdefault(
+            "SBERT_MODEL_PATH",
+            str(app.config["SBERT_MODEL_PATH"])
+        )
 
-    # Hybrid scoring toggle
     app.config["AI_SCORING_MODE"] = (
         os.environ.get("AI_SCORING_MODE")
-        or "HYBRID"   # A_ONLY | HYBRID
+        or "HYBRID"
     )
 
     # ------------------------
-    # SMTP Config (Gmail SMTP)
+    # SMTP Config
     # ------------------------
     app.config["SMTP_HOST"] = (
         app.config.get("SMTP_HOST")
@@ -92,7 +91,7 @@ def create_app():
     app.mongo = mongo
 
     # ------------------------
-    # Ensure Required Indexes (Performance)
+    # Ensure Required Indexes
     # ------------------------
     with app.app_context():
         db = mongo.db
@@ -113,15 +112,19 @@ def create_app():
     # ------------------------
     # Register Blueprints
     # ------------------------
+
+    # ✅ ADD AUTH CONTROLLER HERE
+    from app.controllers.auth_controller import auth_bp
     from app.controllers.job_controller import job_bp
     from app.controllers.resume_controller import resume_bp
     from app.controllers.interview_controller import interview_bp
     from app.controllers.interview_ai_controller import interview_ai_bp
 
-    app.register_blueprint(job_bp)
+    app.register_blueprint(auth_bp)  # /auth/*
+    app.register_blueprint(job_bp)   # /dashboard, /jobs
     app.register_blueprint(resume_bp, url_prefix="/screening")
     app.register_blueprint(interview_bp, url_prefix="/interview")
-    app.register_blueprint(interview_ai_bp)  # /interview-ai
+    app.register_blueprint(interview_ai_bp)
 
     # ------------------------
     # Health Check

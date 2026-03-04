@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Interview Preview{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/interview_q.css') }}">
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+
+<div class="iq-page">
+
+  <!-- =========================
+       HERO CARD (ROLE + TOPICS)
+  ========================== -->
+  <section class="iq-hero">
+    <div class="iq-hero-left">
+      <div class="iq-role">
+        <div class="iq-role-ico">
+          <i class="fa-solid fa-briefcase"></i>
+        </div>
+        <div>
+          <h1 id="iqRoleTitle">Role</h1>
+          <div class="iq-sub" id="iqRoleSub">Interview Questions</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="iq-hero-right">
+      <div class="iq-mini-card">
+        <div class="iq-mini-label">Questions</div>
+        <div class="iq-mini-value" id="iqTotalQ">0</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================
+       MAIN (STACKED QUESTIONS)
+  ========================== -->
+  <section class="iq-main">
+    <div class="iq-card">
+
+      <div class="iq-card-top">
+        <div class="iq-qmeta" id="iqQMeta">Loading…</div>
+
+        <!-- tiny wave icon -->
+        <div class="iq-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <!-- Questions list (stacked) -->
+      <div class="iq-list" id="iqQList" aria-live="polite">
+        <!-- question cards injected one-by-one -->
+      </div>
+
+      <div class="iq-card-bottom">
+        <div class="iq-note">
+          <i class="fa-solid fa-microphone"></i>
+          Audio recording starts in the next screen.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- =========================
+       BOTTOM LOADER STRIP
+       (ONLY countdown lives here)
+  ========================== -->
+  <footer class="iq-bottom">
+    <div class="iq-bottom-left">
+      <i class="fa-solid fa-circle-notch fa-spin"></i>
+      <span id="iqBottomText">Preparing your interview…</span>
+    </div>
+
+    <div class="iq-bottom-right" id="iqBottomCountdown" style="display:none;">
+      <span>Meeting will start in</span>
+      <b id="iqBottomNum">3</b>
+    </div>
+  </footer>
+
+</div>
+
+
+<script>
+  // Data from backend
+  window.__INTERVIEW_PREVIEW_CTX__ = {
+    interviewId: {{ interview_id | tojson }},
+    role: {{ role | tojson }},
+    topics: {{ topics | tojson }},
+    questions: {{ questions | tojson }},
+    redirectUrl: {{ redirect_url | tojson }},
+
+    // timings
+    showEachQuestionMs: {{ show_each_ms | tojson }},
+    afterLastCountdownSec: {{ countdown_sec | tojson }}
+  };
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='js/interview_q.js') }}"></script>
+{% endblock %}

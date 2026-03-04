@@ -1,0 +1,368 @@
+/* static/css/interview_results.css — POPUP-OPTIMIZED ✅ */
+
+:root{
+  --bg: #f3f6fb;
+  --card: #ffffff;
+
+  --text: #0f172a;
+  --muted: #64748b;
+
+  --stroke: #e6e9f5;
+  --stroke2: #eef2ff;
+
+  --shadow: 0 18px 40px rgba(15,23,42,.10);
+  --shadow2: 0 10px 22px rgba(15,23,42,.07);
+
+  --primary: #2563eb;
+
+  --r-xl: 18px;
+  --r-lg: 14px;
+  --r-md: 12px;
+}
+
+/* ✅ Standalone page — full height */
+html, body{
+  height: 100%;
+}
+
+body{
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ✅ Popup-safe padding (smaller sides) */
+.ir-page{
+  min-height: 100vh;
+  padding: 14px 12px 18px;
+  background: var(--bg);
+}
+
+/* ✅ Fill popup width (no center narrow column) */
+.ir-container{
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Top layout */
+.ir-top{
+  display:flex;
+  gap: 14px;
+  align-items: stretch;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+/* Left meta card */
+.ir-meta{
+  flex: 1 1 560px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  padding: 18px 18px;
+  box-shadow: var(--shadow2);
+}
+
+.ir-title{
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: .2px;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.ir-sub{
+  margin-top: 10px;
+  color: var(--text);
+  font-weight: 700;
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  flex-wrap: wrap;
+}
+
+.ir-sub-item{ color: #1f2937; }
+
+.ir-dot{
+  color: #94a3b8;
+  font-weight: 900;
+}
+
+.ir-sub2{
+  margin-top: 10px;
+  color: var(--muted);
+  font-weight: 700;
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+/* Right score card */
+.ir-scorecard{
+  width: 320px;
+  max-width: 100%;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  padding: 16px 16px;
+  box-shadow: var(--shadow);
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ir-score-label{
+  width: 100%;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  text-align:center;
+}
+
+/* Progress ring */
+.ir-ring{
+  position: relative;
+  width: 165px;
+  height: 165px;
+  margin: 12px 0 8px;
+}
+
+.ir-ring-svg{
+  width: 165px;
+  height: 165px;
+  transform: rotate(-90deg);
+}
+
+.ir-ring-bg{
+  fill: none;
+  stroke: #e9eef8;
+  stroke-width: 12;
+}
+
+.ir-ring-fg{
+  fill: none;
+  stroke: var(--primary);
+  stroke-linecap: round;
+  stroke-width: 12;
+  stroke-dasharray: 289;
+  stroke-dashoffset: 289;
+  transition: stroke 0.2s ease;
+}
+
+.ir-ring-center{
+  position:absolute;
+  inset: 0;
+  display:flex;
+  flex-direction: column;
+  align-items:center;
+  justify-content:center;
+}
+
+.ir-ring-num{
+  font-weight: 900;
+  color: var(--text);
+  font-size: 38px;
+  line-height: 1;
+}
+
+.ir-ring-den{
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: .3px;
+}
+
+.ir-score-foot{
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+/* ---------- TABLE WRAP ---------- */
+.ir-tablewrap{
+  margin-top: 14px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow2);
+}
+
+.ir-tablehead{
+  padding: 12px 14px;
+  font-weight: 900;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--stroke);
+  color: var(--text);
+}
+
+/* ✅ Scroll area behaves well in popup */
+.ir-scroll{
+  max-height: calc(100vh - 320px); /* popup-friendly */
+  overflow: auto;
+}
+
+/* ✅ No forced 980px width — fits popup */
+.ir-table{
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 0;
+}
+
+.ir-table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ir-table th{
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 900;
+  color: #334155;
+  border-bottom: 1px solid var(--stroke);
+  background: #fff;
+  white-space: nowrap;
+}
+
+.ir-table td{
+  padding: 12px 12px;
+  border-bottom: 1px solid var(--stroke2);
+  vertical-align: top;
+  color: var(--text);
+}
+
+/* Columns */
+.col-qid{ width: 140px; }
+.col-score{ width: 130px; }
+.col-fb{ width: 320px; }
+.col-qa{ width: auto; }
+
+/* Cell styles */
+.qid{
+  font-weight: 900;
+  color: #111827;
+}
+
+/* ✅ Combined QA */
+.qa{
+  line-height: 1.5;
+}
+
+.qa-q{
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.qa-a{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: #fbfdff;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
+.muted{
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* Score pill */
+.score-pill{
+  display:inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: #f8fafc;
+  font-weight: 900;
+}
+
+.score-num{
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.score-den{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+/* Actions */
+.ir-actions{
+  margin-top: 12px;
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-primary,
+.btn-outline{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 900;
+  text-decoration:none;
+  cursor:pointer;
+  border: 1px solid transparent;
+  transition: transform .08s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+
+.btn-primary{
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(37,99,235,.18);
+}
+.btn-primary:hover{ transform: translateY(-1px); }
+
+.btn-outline{
+  background: #fff;
+  color: #0f172a;
+  border-color: var(--stroke);
+}
+.btn-outline:hover{
+  transform: translateY(-1px);
+  box-shadow: var(--shadow2);
+}
+
+/* Empty state */
+.ir-empty{
+  margin-top: 14px;
+}
+.ir-empty-card{
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  padding: 18px;
+  box-shadow: var(--shadow2);
+}
+.ir-empty-card h3{
+  margin: 0;
+  font-weight: 900;
+  color: var(--text);
+}
+.ir-empty-card p{
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* ✅ Mobile tweaks */
+@media (max-width: 900px){
+  .ir-scorecard{ width: 100%; }
+  .col-fb{ width: 260px; }
+}

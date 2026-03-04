@@ -20,7 +20,7 @@
     <div class="mt-hero-right">
       <a class="mt-btn mt-btn-join"
          id="btnJoinMeeting"
-         href="/interview/interview/{{ interview_id }}">
+         href="{{ url_for('interview_bp.interview_preview_page', interview_id=interview_id) }}">
         Join Meeting
       </a>
     </div>
@@ -120,7 +120,7 @@
         <div class="mt-panel-corner mt-panel-corner-left">
           <a class="mt-btn mt-btn-outline"
              id="btnBackCal"
-             href="/interview/calander">
+             href="{{ url_for('interview_bp.calander_page') }}">
             ← Back to Calendar
           </a>
         </div>

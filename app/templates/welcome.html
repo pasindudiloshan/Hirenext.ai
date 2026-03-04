@@ -7,6 +7,9 @@
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
 
+  <!-- ✅ Auth Popup CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+
   <!-- ✅ Font Awesome Kit -->
   <script src="https://kit.fontawesome.com/e2638107b1.js" crossorigin="anonymous"></script>
 </head>
@@ -24,10 +27,10 @@
       </div>
     </div>
 
-
     <div class="topbar-right welcome-actions">
-      <a class="btn-outline" href="/login">Register</a>
-      <a class="btn-primary" href="/login">Login</a>
+      <!-- ✅ Keep ids + data-auth for welcome.js -->
+      <a class="btn-outline" href="#" id="openRegister" data-auth="register">Register</a>
+      <a class="btn-primary" href="#" id="openLogin" data-auth="login">Login</a>
     </div>
   </header>
 
@@ -50,7 +53,7 @@
         </p>
 
         <div class="hero-actions">
-          <a class="btn-primary hero-btn" href="/dashboard">Get Started</a>
+          <a class="btn-primary hero-btn" href="#" id="openGetStarted" data-auth="login">Get Started</a>
         </div>
 
         <div class="hero-note">
@@ -140,6 +143,14 @@
     </div>
   </section>
 
+  <!-- ✅ Auth Modal -->
+  <div id="authModal" class="auth-modal hidden" aria-hidden="true">
+    <div class="auth-modal-content" role="dialog" aria-modal="true" aria-label="Authentication">
+      <button type="button" class="auth-close" aria-label="Close">&times;</button>
+      <div id="authModalBody"></div>
+    </div>
+  </div>
+
   <!-- ✅ SAME FOOTER AS base.html -->
   <footer id="footer" class="footer">
     <div class="footer-container">
@@ -157,7 +168,7 @@
         </p>
       </div>
 
-            <div class="footer-col">
+      <div class="footer-col">
         <h4>Platform</h4>
         <ul>
           <li><a href="/dashboard">Dashboard</a></li>
@@ -203,6 +214,9 @@
     </div>
   </footer>
 
+  <!-- ✅ Keep these only (no inline modal script) -->
   <script defer src="{{ url_for('static', filename='js/welcome.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/auth.js') }}"></script>
+
 </body>
 </html>

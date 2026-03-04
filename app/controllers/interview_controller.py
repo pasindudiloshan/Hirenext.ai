@@ -8,7 +8,15 @@ import smtplib
 from email.message import EmailMessage
 
 from bson import ObjectId
-from flask import Blueprint, current_app, jsonify, render_template, request, url_for  # ✅ UPDATED
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    render_template,
+    request,
+    url_for,
+    redirect,   # ✅ NEW (safe)
+)
 
 from app.models.shortlisted_batch_model import ShortlistedBatchModel
 from app.services.interview_service import InterviewService
@@ -234,6 +242,78 @@ def meeting_page(interview_id: str):
 
 
 # ============================================================
+# ✅ NEW: Interview Preview Page (Middle page before interview.html)
+# Template: templates/interview/interview_Q.html
+# ============================================================
+
+@interview_bp.route("/interview_Q/<interview_id>", methods=["GET"])
+def interview_preview_page(interview_id: str):
+    """
+    Middle preview page:
+      - Shows role + topics + questions one-by-one
+      - After last question shows 3..2..1 then auto-redirects to interview.html
+    """
+    db = _get_db()
+    oid = _oid(interview_id)
+
+    # Where preview will redirect after countdown:
+    redirect_url = url_for("interview_bp.live_interview_page", interview_id=str(interview_id))
+
+    # Defaults (safe)
+    role = ""
+    questions: List[str] = []
+    topics: List[str] = []
+
+    if oid:
+        row = db.interviews.find_one({"_id": oid}) or {}
+        role_raw = (row.get("job_title") or row.get("role") or "").strip()
+        role = _normalize_role(role_raw)
+
+        # Load questions from question_bank (Mongo)
+        q_full = (QuestionBankService.get_questions_for_role(role) if role else [])[:5]
+
+        # Convert to list[str] for the preview page
+        for q in (q_full or []):
+            if isinstance(q, dict):
+                qtext = str(q.get("question") or "").strip()
+                if qtext:
+                    questions.append(qtext)
+
+                skill = str(q.get("skill") or "").strip()
+                if skill:
+                    topics.append(skill)
+
+    # clean topics unique (preserve order)
+    seen = set()
+    topics = [t for t in topics if not (t.lower() in seen or seen.add(t.lower()))]
+
+    # If no questions loaded, show safe placeholders
+    if not questions:
+        questions = [
+            "Preparing your questions…",
+            "Checking audio and camera permissions…",
+            "Almost ready to start…",
+        ]
+        if not topics:
+            topics = ["General"]
+
+    # UI timing controls
+    show_each_ms = 1800   # 1.8 seconds per question
+    countdown_sec = 3     # 3..2..1
+
+    return render_template(
+        "interview/interview_Q.html",
+        interview_id=str(interview_id),
+        role=role or "Interview",
+        topics=topics,
+        questions=questions,
+        redirect_url=redirect_url,
+        show_each_ms=show_each_ms,
+        countdown_sec=countdown_sec,
+    )
+
+
+# ============================================================
 # ✅ UPDATED: Live Interview Session Page (Option A/B injection)
 # ============================================================
 
@@ -278,7 +358,7 @@ def live_interview_page(interview_id: str):
     role = _normalize_role(role_raw)
 
     # ✅ load question list for role
-    questions_full = QuestionBankService.get_questions_for_role(role) if role else []
+    questions_full = (QuestionBankService.get_questions_for_role(role) if role else [])[:5]
     questions: List[Dict[str, Any]] = []
     for q in (questions_full or []):
         if isinstance(q, dict):

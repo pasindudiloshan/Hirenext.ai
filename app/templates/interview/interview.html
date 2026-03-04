@@ -1,8 +1,4 @@
-{# templates/interview/interview.html — FINAL UI ✅
-   - Spinner inside AI panel (replaces transcript label)
-   - Optional transcript div (hidden by default)
-   - Minimal question panel + big FontAwesome mic button
-#}
+{# templates/interview/interview.html — UPDATED for centered popup results #}
 {% extends "base.html" %}
 {% block title %}AI Interview Session{% endblock %}
 
@@ -32,11 +28,12 @@
         <!-- centered mic icon (AI) -->
         <i class="fa-solid fa-microphone iv-fa-mic"></i>
 
-<div class="iv-ai-status" id="aiStatus">
-  <div class="iv-dots" id="aiDots" aria-label="AI is processing">
-    <span></span><span></span><span></span>
-  </div>
-</div>
+        <div class="iv-ai-status" id="aiStatus">
+          <div class="iv-dots" id="aiDots" aria-label="AI is processing">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -64,7 +61,6 @@
         <i class="fa-solid fa-microphone"></i>
       </button>
     </div>
-
   </section>
 
   <!-- BOTTOM DOCK (VIDEO / MIC / SCREEN-RECORD / END) -->
@@ -82,10 +78,10 @@
       <i class="fa-solid fa-circle"></i>
     </button>
 
-    <!-- End → Results -->
-    <a class="iv-dock-btn-lite iv-end" href="{{ end_url or results_url or '#' }}" title="End">
+    <!-- ✅ End → Results (Popup) -->
+    <button class="iv-dock-btn-lite iv-end" id="btnEndInterview" type="button" title="End & View Results">
       <i class="fa-solid fa-phone-slash"></i>
-    </a>
+    </button>
   </div>
 
 </div>
@@ -102,8 +98,44 @@
     role: {{ (role or "")|tojson }},
     questions: {{ (questions or [])|tojson }},
     submitUrl: {{ (submit_url or "/interview-ai/submit-answer")|tojson }},
-    resultsUrl: {{ (results_url or "")|tojson }}
+    resultsUrl: {{ (results_url or end_url or "")|tojson }}
   };
+
+  // ✅ Popup helper (centered) — make it GLOBAL so interview.js can call it too
+  window.openCenteredPopup = function (url) {
+    const w = Math.min(1100, Math.floor(window.screen.width * 0.9));
+    const h = Math.min(780, Math.floor(window.screen.height * 0.85));
+    const left = Math.floor((window.screen.width - w) / 2);
+    const top = Math.floor((window.screen.height - h) / 2);
+
+    const win = window.open(
+      url,
+      "InterviewResults",
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    // Popup blocked → fallback to normal navigation
+    if (!win || win.closed || typeof win.closed === "undefined") {
+      window.location.href = url;
+      return null;
+    }
+
+    win.focus();
+    return win;
+  };
+
+  // ✅ End button → open results as separate popup page
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("btnEndInterview");
+
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const url = (window.__INTERVIEW_AI_CTX__ || {}).resultsUrl || "";
+        if (!url) return;
+        window.openCenteredPopup(url);
+      });
+    }
+  });
 </script>
 {% endblock %}
 

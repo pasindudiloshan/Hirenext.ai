@@ -1,15 +1,18 @@
-# app/services/question_bank_service.py
+# app/services/question_bank_service.py  ✅ MongoDB-backed (no JSON file)
 from __future__ import annotations
 
-import json
-import os
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
+
+from flask import current_app
 
 
 @dataclass(frozen=True)
 class BankLoadResult:
+    """
+    Kept for compatibility with your older code style.
+    Now reflects Mongo status instead of JSON file status.
+    """
     ok: bool
     bank: Dict[str, List[Dict[str, Any]]]
     error: Optional[str] = None
@@ -19,214 +22,254 @@ class BankLoadResult:
 
 class QuestionBankService:
     """
-    Loads interview question bank from:
-      app/data/interview_QA_bank.json
+    ✅ MongoDB question bank service
 
-    Expected JSON shape:
+    Collection: question_bank
+
+    Expected document shape (per question):
       {
-        "Role Name": [
-          {
-            "id": "ROLE_Q1",
-            "question": "....",
-            "rubric": [ {"point": "...", "score": 4}, ... ],
-            "correctness": { ... optional ... }
-          },
-          ...
-        ],
-        ...
+        "role": "Senior Accountant",
+        "question_id": "SA_Q1",
+        "question": "...",
+        "skill": "...",
+        "difficulty": "...",
+        "rubric": [ {"point": "...", "score": 4}, ... ],
+        "correctness": { ... },
+        "is_active": true
       }
 
-    Safe behavior:
-    - If file does not exist yet: returns empty roles/questions (no crash).
-    - Provides validate helpers to catch common mistakes early.
-    - Supports forgiving role matching (case-insensitive + trimmed).
+    Notes:
+    - No JSON file, no lru_cache, no reload needed
+    - Role matching supports:
+        exact role
+        normalized role (case/whitespace)
     """
 
-    DEFAULT_FILENAME = "interview_QA_bank.json"
+    COLLECTION = "question_bank"
+    DEFAULT_QUESTION_LIMIT = 5
+
+    # ----------------------------
+    # DB helpers
+    # ----------------------------
+    @staticmethod
+    def _db():
+        return current_app.mongo.db
 
     # ----------------------------
     # Role normalization
     # ----------------------------
     @staticmethod
     def normalize_role(role: str) -> str:
-        """
-        Normalize role names for lookup.
-        (Keeps it conservative: only whitespace + lower)
-        """
+        """Normalize role names for matching (lower + collapse whitespace)."""
         return " ".join((role or "").strip().split()).lower()
 
-    # ----------------------------
-    # Path helpers
-    # ----------------------------
     @staticmethod
-    def _bank_path() -> str:
+    def _resolve_role_key(role: str) -> Optional[str]:
         """
-        Resolve absolute path to app/data/interview_QA_bank.json
-        Works regardless of where app is executed from.
+        Finds best matching role in DB.
+        Matching order:
+          1) exact match (case-sensitive)
+          2) normalized match (case-insensitive + trimmed)
         """
-        services_dir = os.path.dirname(os.path.abspath(__file__))  # app/services
-        app_dir = os.path.dirname(services_dir)                    # app/
-        data_dir = os.path.join(app_dir, "data")                   # app/data
-        return os.path.join(data_dir, QuestionBankService.DEFAULT_FILENAME)
+        role = (role or "").strip()
+        if not role:
+            return None
 
-    # ----------------------------
-    # Load + cache
-    # ----------------------------
-    @staticmethod
-    @lru_cache(maxsize=1)
-    def _load_bank_cached() -> BankLoadResult:
-        """
-        Cached bank loader (single process cache).
-        If you edit JSON while server is running, call reload_bank().
-        """
-        path = QuestionBankService._bank_path()
+        db = QuestionBankService._db()
+        col = db[QuestionBankService.COLLECTION]
 
-        if not os.path.exists(path):
-            return BankLoadResult(
-                ok=False,
-                bank={},
-                error=f"Question bank file not found at: {path}",
-                path=path,
-                warnings=[],
-            )
+        # 1) exact (fast check)
+        if col.find_one({"role": role, "is_active": True}, projection={"_id": 1}):
+            return role
 
+        # 2) normalized match
+        target = QuestionBankService.normalize_role(role)
+
+        # Get distinct roles that exist (active only)
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-        except json.JSONDecodeError as e:
-            return BankLoadResult(
-                ok=False,
-                bank={},
-                error=f"Invalid JSON in question bank: {e}",
-                path=path,
-                warnings=[],
-            )
-        except Exception as e:
-            return BankLoadResult(
-                ok=False,
-                bank={},
-                error=f"Failed to read question bank: {e}",
-                path=path,
-                warnings=[],
-            )
-
-        bank = QuestionBankService._normalize_bank(raw)
-        ok, err, warnings = QuestionBankService.validate_bank(bank)
-
-        return BankLoadResult(
-            ok=ok,
-            bank=bank,
-            error=err,
-            path=path,
-            warnings=warnings,
-        )
-
-    @staticmethod
-    def reload_bank() -> BankLoadResult:
-        """
-        Clear cache and reload from disk.
-        Call this after editing interview_QA_bank.json without restarting server.
-        """
-        try:
-            QuestionBankService._load_bank_cached.cache_clear()
+            roles = col.distinct("role", {"is_active": True}) or []
         except Exception:
-            pass
-        return QuestionBankService._load_bank_cached()
+            roles = []
 
+        for r in roles:
+            if QuestionBankService.normalize_role(str(r)) == target:
+                return str(r)
+
+        return None
+
+    # ----------------------------
+    # Document -> Question dict
+    # ----------------------------
     @staticmethod
-    def load_bank() -> BankLoadResult:
-        """Get the cached bank load result."""
-        return QuestionBankService._load_bank_cached()
+    def _to_question(doc: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convert Mongo doc into the shape used across your app.
+        Ensures keys:
+          id, question, skill, difficulty, rubric, correctness
+        """
+        if not isinstance(doc, dict):
+            return {}
+
+        # rubric normalization
+        rb = doc.get("rubric") or []
+        new_rb: List[Dict[str, Any]] = []
+        if isinstance(rb, list):
+            for p in rb:
+                if isinstance(p, dict):
+                    point = str(p.get("point") or "").strip()
+                    score = p.get("score", 0)
+                    try:
+                        score = float(score)
+                    except Exception:
+                        score = 0.0
+                    if point:
+                        new_rb.append({"point": point, "score": score})
+
+        correctness = doc.get("correctness") or {}
+        if not isinstance(correctness, dict):
+            correctness = {}
+
+        return {
+            "id": str(doc.get("question_id") or doc.get("id") or "").strip(),
+            "question": str(doc.get("question") or "").strip(),
+            "skill": str(doc.get("skill") or "").strip(),
+            "difficulty": str(doc.get("difficulty") or "").strip(),
+            "rubric": new_rb,
+            "correctness": correctness,
+        }
 
     # ----------------------------
     # Public API
     # ----------------------------
     @staticmethod
     def get_roles() -> List[str]:
-        res = QuestionBankService.load_bank()
-        roles = sorted([str(k) for k in (res.bank or {}).keys()])
-        return roles
+        """Return all active roles that have active questions."""
+        db = QuestionBankService._db()
+        col = db[QuestionBankService.COLLECTION]
+        try:
+            roles = col.distinct("role", {"is_active": True}) or []
+        except Exception:
+            roles = []
+        return sorted([str(r) for r in roles if str(r).strip()])
 
     @staticmethod
-    def _resolve_role_key(role: str) -> Optional[str]:
+    def get_questions_for_role(
+        role: str,
+        limit: Optional[int] = None,
+        *,
+        random_pick: bool = False
+    ) -> List[Dict[str, Any]]:
         """
-        Finds the best matching role key inside the JSON bank.
-        Matching order:
-          1) exact
-          2) normalized (case-insensitive + trimmed)
+        Return questions for a role.
+
+        - limit: max number of questions (default = DEFAULT_QUESTION_LIMIT)
+        - random_pick: if True, randomly sample questions (good for real interviews)
         """
-        role = (role or "").strip()
-        if not role:
-            return None
-
-        res = QuestionBankService.load_bank()
-        bank = res.bank or {}
-
-        # 1) exact
-        if role in bank:
-            return role
-
-        # 2) normalized match
-        target = QuestionBankService.normalize_role(role)
-        for k in bank.keys():
-            if QuestionBankService.normalize_role(k) == target:
-                return k
-
-        return None
-
-    @staticmethod
-    def get_questions_for_role(role: str) -> List[Dict[str, Any]]:
         role = (role or "").strip()
         if not role:
             return []
 
-        res = QuestionBankService.load_bank()
-        key = QuestionBankService._resolve_role_key(role)
-        if not key:
+        resolved = QuestionBankService._resolve_role_key(role)
+        if not resolved:
             return []
 
-        qs = (res.bank or {}).get(key) or []
-        return [dict(q) for q in qs if isinstance(q, dict)]
+        db = QuestionBankService._db()
+        col = db[QuestionBankService.COLLECTION]
+
+        # Fetch active questions for role
+        docs = list(col.find(
+            {"role": resolved, "is_active": True},
+            projection={
+                "_id": 0,
+                "role": 1,
+                "question_id": 1,
+                "id": 1,
+                "question": 1,
+                "skill": 1,
+                "difficulty": 1,
+                "rubric": 1,
+                "correctness": 1,
+            }
+        ))
+
+        qs = [QuestionBankService._to_question(d) for d in docs]
+        qs = [q for q in qs if q.get("id") and q.get("question")]
+
+        # Apply limit
+        n = QuestionBankService.DEFAULT_QUESTION_LIMIT if limit is None else int(limit)
+        if n <= 0:
+            return qs
+
+        if random_pick and len(qs) > n:
+            # built-in random sampling (no extra imports outside function)
+            import random
+            return random.sample(qs, n)
+
+        return qs[:n]
 
     @staticmethod
     def get_question(role: str, question_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a single question by role + question_id."""
         role = (role or "").strip()
         question_id = (question_id or "").strip()
-
         if not role or not question_id:
             return None
 
-        qs = QuestionBankService.get_questions_for_role(role)
-        for q in qs:
-            if str(q.get("id", "")).strip() == question_id:
-                return dict(q)
-        return None
+        resolved = QuestionBankService._resolve_role_key(role)
+        if not resolved:
+            return None
+
+        db = QuestionBankService._db()
+        col = db[QuestionBankService.COLLECTION]
+
+        doc = col.find_one(
+            {"role": resolved, "question_id": question_id, "is_active": True},
+            projection={"_id": 0}
+        )
+
+        if not doc:
+            # fallback: maybe stored as "id" instead of "question_id"
+            doc = col.find_one(
+                {"role": resolved, "id": question_id, "is_active": True},
+                projection={"_id": 0}
+            )
+
+        return QuestionBankService._to_question(doc) if doc else None
 
     @staticmethod
     def find_question_by_id(question_id: str) -> Optional[Dict[str, Any]]:
         """
-        Useful debugging helper: find a question by id across ALL roles.
+        Debug helper: find by question_id across ALL roles.
+        Returns question + _role if found.
         """
         qid = (question_id or "").strip()
         if not qid:
             return None
 
-        res = QuestionBankService.load_bank()
-        for role, qs in (res.bank or {}).items():
-            if not isinstance(qs, list):
-                continue
-            for q in qs:
-                if isinstance(q, dict) and str(q.get("id", "")).strip() == qid:
-                    out = dict(q)
-                    out["_role"] = role
-                    return out
-        return None
+        db = QuestionBankService._db()
+        col = db[QuestionBankService.COLLECTION]
+
+        doc = col.find_one(
+            {"question_id": qid, "is_active": True},
+            projection={"_id": 0}
+        )
+        if not doc:
+            doc = col.find_one(
+                {"id": qid, "is_active": True},
+                projection={"_id": 0}
+            )
+
+        if not doc:
+            return None
+
+        out = QuestionBankService._to_question(doc)
+        out["_role"] = str(doc.get("role") or "")
+        return out
 
     @staticmethod
     def get_question_or_raise(role: str, question_id: str) -> Dict[str, Any]:
         q = QuestionBankService.get_question(role, question_id)
         if q is None:
-            # Debug aid: try global search
             found = QuestionBankService.find_question_by_id(question_id)
             if found:
                 raise KeyError(
@@ -237,84 +280,34 @@ class QuestionBankService:
         return q
 
     # ----------------------------
-    # Normalize + validate
+    # Optional: Health / Validation
     # ----------------------------
     @staticmethod
-    def _normalize_bank(raw: Any) -> Dict[str, List[Dict[str, Any]]]:
+    def load_bank() -> BankLoadResult:
         """
-        Best-effort normalization:
-        - Ensures dict[str, list[dict]]
-        - Strips role names
-        - Ensures each question has id/question fields (if present)
+        Compatibility method: returns a pseudo 'bank' grouped by role.
+        Avoid using this for runtime interview flow (DB queries are better).
         """
-        if not isinstance(raw, dict):
-            return {}
-
-        out: Dict[str, List[Dict[str, Any]]] = {}
-        for role, items in raw.items():
-            r = str(role).strip()
-            if not r:
-                continue
-
-            if not isinstance(items, list):
-                continue
-
-            norm_items: List[Dict[str, Any]] = []
-            for it in items:
-                if not isinstance(it, dict):
-                    continue
-                q = dict(it)
-
-                # normalize keys we rely on
-                q["id"] = str(q.get("id") or "").strip()
-                q["question"] = str(q.get("question") or "").strip()
-
-                # optional fields
-                if "skill" in q:
-                    q["skill"] = str(q.get("skill") or "").strip()
-                if "difficulty" in q:
-                    q["difficulty"] = str(q.get("difficulty") or "").strip()
-
-                # rubric normalization (list of {point, score})
-                rb = q.get("rubric")
-                if isinstance(rb, list):
-                    new_rb = []
-                    for p in rb:
-                        if isinstance(p, dict):
-                            point = str(p.get("point") or "").strip()
-                            score = p.get("score", 0)
-                            try:
-                                score = float(score)
-                            except Exception:
-                                score = 0.0
-                            if point:
-                                new_rb.append({"point": point, "score": score})
-                    q["rubric"] = new_rb
-                else:
-                    q["rubric"] = []
-
-                norm_items.append(q)
-
-            out[r] = norm_items
-
-        return out
+        try:
+            roles = QuestionBankService.get_roles()
+            bank: Dict[str, List[Dict[str, Any]]] = {}
+            for r in roles:
+                bank[r] = QuestionBankService.get_questions_for_role(r, limit=10_000)
+            ok, err, warnings = QuestionBankService.validate_bank(bank)
+            return BankLoadResult(ok=ok, bank=bank, error=err, warnings=warnings)
+        except Exception as e:
+            return BankLoadResult(ok=False, bank={}, error=str(e), warnings=[])
 
     @staticmethod
     def validate_bank(bank: Dict[str, List[Dict[str, Any]]]) -> Tuple[bool, Optional[str], List[str]]:
         """
-        Minimal validation:
-        - bank is dict[role] -> list
-        - each question has non-empty id + question
-        - rubric scores should sum to ~10 (WARNING only)
+        Minimal validation (same spirit as your JSON version).
         """
         warnings: List[str] = []
-
         if not isinstance(bank, dict) or not bank:
-            # allow boot with empty bank, but flag as not ok
-            return False, "Question bank is empty or invalid (create app/data/interview_QA_bank.json).", warnings
+            return False, "Question bank is empty or invalid in MongoDB.", warnings
 
         seen_ids = set()
-
         for role, qs in bank.items():
             if not isinstance(qs, list):
                 return False, f"Role '{role}' must map to a list of questions.", warnings
@@ -339,7 +332,6 @@ class QuestionBankService:
                 if not isinstance(rb, list):
                     return False, f"Role '{role}' question '{qid}' rubric must be a list.", warnings
 
-                # WARNING only: rubric sum
                 total = 0.0
                 for p in rb:
                     if isinstance(p, dict):

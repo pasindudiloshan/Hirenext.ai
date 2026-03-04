@@ -1,5 +1,5 @@
 # app/services/interview_service.py
-# HireNext.ai — Interview Scheduling Service (MongoDB) — UPDATED for Calendar → Meeting edit
+# HireNext.ai — Interview Scheduling Service (MongoDB) — UPDATED for Interview_Q preview role/questions
 #
 # ✅ Existing features kept:
 # - timezone-aware storage (UTC for created/updated; local tz for slot math)
@@ -8,7 +8,7 @@
 # - prevent scheduling SAME candidate twice in the same batch (across any date)
 # - calendar events serializer for calander.js
 #
-# ✅ NEW (for meeting.html edit page):
+# ✅ meeting.html edit page:
 # - update_interview(interview_id, patch)
 # - cancel_interview(interview_id)
 #
@@ -16,11 +16,17 @@
 # - meeting_link_default patch is applied to screening_batches
 # - batch update works for ObjectId OR string id
 #
-# ✅ NEW FIX (Remaining-to-schedule / prevent extra slots):
-# - save_confirmed_interviews() now blocks scheduling if:
+# ✅ Remaining-to-schedule / prevent extra slots:
+# - save_confirmed_interviews() blocks scheduling if:
 #     - remaining_to_schedule == 0
 #     - OR len(interviews) > remaining_to_schedule
 # - (recommended) only allows scheduling candidate_ids that are in shortlisted_candidates
+#
+# ✅ NEW FIX (for preview page + question bank):
+# - Every interview doc now stores BOTH:
+#     - job_title  (display)
+#     - role       (question-bank key)
+# - role is derived safely from batch_doc (fallbacks supported)
 
 from __future__ import annotations
 
@@ -102,6 +108,45 @@ class InterviewService:
             oid = InterviewService._oid(val)
             return oid if oid else val
         return val
+
+    # ---------------------------------------------------------
+    # ✅ NEW: job/role resolver (critical for interview_Q page)
+    # ---------------------------------------------------------
+    @staticmethod
+    def _resolve_job_and_role(batch_doc: Dict[str, Any]) -> Tuple[str, str]:
+        """
+        Returns (job_id, role_name)
+
+        Tries common keys across your system:
+          - batch_doc["job_title"]
+          - batch_doc["role"]
+          - batch_doc["job"]["job_title"]
+          - batch_doc["job"]["title"]
+          - batch_doc["job_name"]
+        """
+        job_id = str(batch_doc.get("job_id") or batch_doc.get("jobId") or "").strip()
+
+        role = (
+            str(batch_doc.get("job_title") or "").strip()
+            or str(batch_doc.get("role") or "").strip()
+        )
+
+        job_obj = batch_doc.get("job")
+        if not role and isinstance(job_obj, dict):
+            role = (
+                str(job_obj.get("job_title") or "").strip()
+                or str(job_obj.get("title") or "").strip()
+            )
+            if not job_id:
+                job_id = str(job_obj.get("_id") or job_obj.get("id") or "").strip()
+
+        if not role:
+            role = str(batch_doc.get("job_name") or batch_doc.get("jobTitle") or "").strip()
+
+        # Final safe default
+        role = role or "Interview"
+
+        return job_id, role
 
     # ---------------------------------------------------------
     # Date/time helpers
@@ -426,17 +471,10 @@ class InterviewService:
         return True, None
 
     # ---------------------------
-    # NEW: shortlist guard
+    # shortlist guard
     # ---------------------------
     @staticmethod
     def _extract_shortlisted_candidate_ids(batch_doc: Dict[str, Any]) -> set[str]:
-        """
-        Returns candidate_id set from batch_doc.shortlisted_candidates.
-
-        Supports common shapes:
-          - {"candidate_id": "..."}
-          - {"_id": "..."}   (if you stored candidate as _id)
-        """
         out: set[str] = set()
         for c in (batch_doc.get("shortlisted_candidates") or []):
             if not isinstance(c, dict):
@@ -451,9 +489,6 @@ class InterviewService:
 
     @staticmethod
     def _remaining_to_schedule(batch_doc: Dict[str, Any], batch_id: str) -> Tuple[int, int, int]:
-        """
-        Returns (shortlisted_total, already_scheduled, remaining)
-        """
         db = InterviewService._db()
         shortlisted_total = len(batch_doc.get("shortlisted_candidates") or [])
         already_scheduled = int(db[InterviewService.COLLECTION].count_documents({"batch_id": str(batch_id)}) or 0)
@@ -472,16 +507,6 @@ class InterviewService:
         meeting_link: str,
         interviews: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Inserts interview docs into `interviews` collection.
-
-        Server-side safety:
-        - validates no overlap on the day
-        - validates candidates aren't already scheduled in this batch
-        - ✅ blocks extra scheduling when remaining_to_schedule == 0
-        - ✅ blocks when user sends more interviews than remaining slots for candidates
-        - ✅ (recommended) only allows candidate_ids that exist in shortlisted_candidates
-        """
         db = InterviewService._db()
         tz = tz or DEFAULT_TZ
 
@@ -492,19 +517,13 @@ class InterviewService:
         if not isinstance(interviews, list) or not interviews:
             return {"ok": False, "error": "No interviews provided"}
 
-        # ✅ NEW: remaining-to-schedule guard
         shortlisted_total, already_scheduled, remaining = InterviewService._remaining_to_schedule(batch_doc, batch_id)
         if remaining <= 0:
             return {"ok": False, "error": "All shortlisted candidates are already scheduled."}
         if len(interviews) > remaining:
-            return {
-                "ok": False,
-                "error": f"Only {remaining} shortlisted candidate(s) remaining to schedule."
-            }
+            return {"ok": False, "error": f"Only {remaining} shortlisted candidate(s) remaining to schedule."}
 
-        # ✅ NEW: restrict scheduling to shortlisted candidates (recommended)
         shortlisted_ids = InterviewService._extract_shortlisted_candidate_ids(batch_doc)
-        # If shortlist has candidate IDs, enforce them
         if shortlisted_ids:
             for it in interviews:
                 cid = str((it or {}).get("candidate_id") or "").strip()
@@ -565,12 +584,21 @@ class InterviewService:
 
         now_utc = datetime.now(timezone.utc)
 
+        # ✅ NEW: resolve role/job_title safely
+        resolved_job_id, resolved_role = InterviewService._resolve_job_and_role(batch_doc)
+        # Keep job_title and role in sync (role is used for question bank matching)
+        job_title = resolved_role
+        role = resolved_role
+
         docs: List[Dict[str, Any]] = []
         for it in normalized:
             docs.append({
                 "batch_id": batch_id,
-                "job_id": str(batch_doc.get("job_id") or ""),
-                "job_title": str(batch_doc.get("job_title") or ""),
+
+                # ✅ job info saved properly for preview + interview pages
+                "job_id": str(resolved_job_id or ""),
+                "job_title": str(job_title or ""),
+                "role": str(role or ""),  # ✅ NEW KEY (important!)
 
                 "candidate_id": str(it.get("candidate_id") or ""),
                 "candidate_name": str(it.get("candidate_name") or it.get("name") or ""),
@@ -601,7 +629,7 @@ class InterviewService:
         except Exception as e:
             return {"ok": False, "error": f"DB insert failed: {e}"}
 
-        # ✅ FIX: update screening_batches even if _id is a string
+        # update screening_batches even if _id is a string
         try:
             batch_pk = InterviewService._maybe_oid(batch_doc.get("_id"))
             count = db[InterviewService.COLLECTION].count_documents({"batch_id": batch_id})
@@ -634,9 +662,6 @@ class InterviewService:
         end_date: str,
         batch_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Returns interviews between date range (inclusive) suitable for calander.js.
-        """
         db = InterviewService._db()
 
         q: Dict[str, Any] = {"date": {"$gte": start_date, "$lte": end_date}}
@@ -656,7 +681,7 @@ class InterviewService:
 
             if not x.get("title"):
                 cand = x.get("candidate_name") or "Candidate"
-                job = x.get("job_title") or "Interview"
+                job = x.get("job_title") or x.get("role") or "Interview"
                 st = x.get("start_label") or ""
                 x["title"] = f"{job} • {cand}" + (f" ({st})" if st else "")
 
@@ -683,17 +708,9 @@ class InterviewService:
         start_time_iso: Optional[str] = None,
         end_time_iso: Optional[str] = None,
     ) -> Tuple[bool, Dict[str, Any], Optional[str]]:
-        """
-        Normalize scheduling fields into:
-          - start_label (HH:MM)
-          - end_label   (HH:MM)
-          - start_time  (ISO with offset)
-          - end_time    (ISO with offset)
-        """
         tz = tz or DEFAULT_TZ
         tzinfo = InterviewService._tzinfo(tz)
 
-        # A) time + duration
         if time_hm and duration_min:
             try:
                 st_local = InterviewService._local_dt(date_iso, time_hm, tz)
@@ -707,7 +724,6 @@ class InterviewService:
             except Exception:
                 return False, {}, "Invalid time/duration"
 
-        # B) labels
         if start_label and end_label:
             try:
                 st_local = InterviewService._local_dt(date_iso, str(start_label), tz)
@@ -723,7 +739,6 @@ class InterviewService:
             except Exception:
                 return False, {}, "Invalid start_label/end_label"
 
-        # C) ISO times
         if start_time_iso and end_time_iso:
             try:
                 st = InterviewService._parse_iso_as_aware(str(start_time_iso), tz).astimezone(tzinfo)
@@ -883,7 +898,9 @@ class InterviewService:
 
         for k in [
             "title", "type", "notes", "meeting_link", "status", "interviewer",
-            "candidate_name", "candidate_email", "candidate_id", "job_title", "job_id"
+            "candidate_name", "candidate_email", "candidate_id",
+            "job_title", "job_id",
+            "role",  # ✅ allow updating role too if needed
         ]:
             if k in patch and patch[k] is not None:
                 update_doc[k] = patch[k]
@@ -909,7 +926,6 @@ class InterviewService:
 
         update_doc["updated_at"] = datetime.now(timezone.utc)
 
-        # Apply meeting_link_default to screening_batches
         if "meeting_link_default" in patch and patch["meeting_link_default"] is not None:
             try:
                 db["screening_batches"].update_one(

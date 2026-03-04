@@ -1,15 +1,22 @@
-/* static/js/interview.js — FINAL (AI loading dots + new flow) ✅
+/* static/js/interview.js — UPDATED (Popup Results + new flow + nicer popup size) ✅
    ✅ Timer, cam/mic toggles, optional screen-record download
    ✅ NEW interview flow:
       - Auto TTS on each question
       - Record button toggles: start -> stop -> auto submit -> auto next
       - During interview: no rubric breakdown UI
-      - AI panel shows LOADING DOTS while processing (no transcript text shown by default)
+      - AI panel shows LOADING DOTS while processing
 
-   IMPORTANT:
-   - Your HTML must contain:
-       <div class="iv-dots" id="aiDots"><span></span><span></span><span></span></div>
-     inside iv-ai-status
+   ✅ NEW RESULTS POPUP:
+      - End button opens results in centered popup (separate page)
+      - When last question completes, tries to open popup (fallback redirect)
+
+   ✅ POPUP SIZE:
+      - Fixed 1180x760 (similar to your screenshot)
+      - Attempts to hide toolbar/menubar/location (browser may ignore some)
+
+   ✅ IMPORTANT:
+      - Uses window.openCenteredPopup from interview.html IF available
+      - Has internal fallback popup helper if not available
 */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -26,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Optional transcript text (hidden in HTML by default)
     transcriptNow: document.getElementById("transcriptNow"),
 
-    // ✅ AI loading dots (replaces spinner)
+    // ✅ AI loading dots
     aiDots: document.getElementById("aiDots"),
 
     btnToggleCam: document.getElementById("btnToggleCam"),
@@ -38,7 +45,9 @@ document.addEventListener("DOMContentLoaded", () => {
     scoreLine: document.getElementById("scoreLine"),
 
     btnRecAns: document.getElementById("btnRecAns"),
-    btnResults: document.getElementById("btnResults"),
+
+    // ✅ End interview button (popup results)
+    btnEnd: document.getElementById("btnEndInterview"),
   };
 
   // ---------------- Context ----------------
@@ -83,6 +92,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // UX tuning
     autoSpeakDelayMs: 350,
     autoNextDelayMs: 350,
+
+    // Results popup: ensure we open once
+    resultsOpened: false,
   };
 
   // ---------------- Utils ----------------
@@ -103,25 +115,81 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   startTimer();
 
+  // ---------------- Centered popup helper ----------------
+  // Prefer the global helper from interview.html (window.openCenteredPopup),
+  // but keep a fallback here so interview.js never breaks.
+  function openCenteredPopupFallback(url, { fallbackToRedirect = true } = {}) {
+    if (!url) return null;
+
+    // ✅ Fixed size like your screenshot
+    const w = 1180;
+    const h = 760;
+
+    const left = Math.floor((window.screen.width - w) / 2);
+    const top = Math.floor((window.screen.height - h) / 2);
+
+    // ✅ Try to reduce chrome (browser may ignore some options)
+    const features = [
+      `width=${w}`,
+      `height=${h}`,
+      `left=${left}`,
+      `top=${top}`,
+      "resizable=yes",
+      "scrollbars=yes",
+      "toolbar=no",
+      "menubar=no",
+      "location=no",
+      "status=no",
+    ].join(",");
+
+    const win = window.open(url, "InterviewResults", features);
+
+    // Popup blocked → fallback
+    if (!win || win.closed || typeof win.closed === "undefined") {
+      if (fallbackToRedirect) window.location.href = url;
+      return null;
+    }
+
+    win.focus();
+    return win;
+  }
+
+  function openCenteredPopup(url, opts) {
+    // ✅ If you defined window.openCenteredPopup in interview.html, use it
+    if (typeof window.openCenteredPopup === "function") {
+      const win = window.openCenteredPopup(url);
+      // If popup blocked, interview.html helper already redirects; just return
+      return win;
+    }
+    // else use fallback that supports the same behavior
+    return openCenteredPopupFallback(url, opts);
+  }
+
+  function openResultsOnce() {
+    if (state.resultsOpened) return;
+    if (!state.resultsUrl) return;
+
+    state.resultsOpened = true;
+
+    // Auto-open may be blocked (not user gesture). Fallback redirect ensures results show.
+    openCenteredPopup(state.resultsUrl, { fallbackToRedirect: true });
+  }
+
   // ---------------- AI loading dots control ----------------
   function setAiLoading(isLoading) {
     if (el.aiDots) el.aiDots.style.display = isLoading ? "flex" : "none";
 
-    // optional ring glow while loading
     if (el.aiRing) {
       el.aiRing.style.boxShadow = isLoading
         ? "0 0 0 14px rgba(56,189,248,.16)"
         : "0 0 0 0 rgba(56,189,248,0)";
     }
   }
-  // default hidden until needed
   setAiLoading(false);
 
   // ---------------- Optional transcript helper ----------------
   function setTranscriptNow(text) {
     if (!el.transcriptNow) return;
-    // Keep hidden by default. If you want to show transcript sometimes:
-    // el.transcriptNow.style.display = "block";
     el.transcriptNow.textContent = String(text || "");
   }
   window.setTranscriptNow = setTranscriptNow;
@@ -281,6 +349,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return state.questions[state.qIndex] || null;
   }
 
+  function getQuestionId(q) {
+    if (!q) return "";
+    return String(q.id || q.question_id || q._id || "").trim();
+  }
+
   // ---------------- Browser TTS ----------------
   function speak(text) {
     const msg = String(text || "");
@@ -307,18 +380,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!hasOptionAI) return;
 
     const q = curQuestion();
+
+    // ✅ finished all questions
     if (!q) {
       if (el.qMeta) el.qMeta.textContent = "All questions completed ✅";
-      if (el.qText) el.qText.textContent = "You can end now.";
+      if (el.qText) el.qText.textContent = "Results will open in a popup.";
       setControlsEnabled({ record: false });
-
-      if (el.btnResults) {
-        if (state.resultsUrl) el.btnResults.href = state.resultsUrl;
-        el.btnResults.style.display = "inline-flex";
-      }
 
       setScoreLine("Interview completed ✅");
       setAiLoading(false);
+
+      // Auto open results (best effort)
+      openResultsOnce();
       return;
     }
 
@@ -327,7 +400,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el.qText) el.qText.textContent = q.question || "Question";
 
     state.lastAnswerBlob = null;
-    if (el.btnResults) el.btnResults.style.display = "none";
 
     // reset record button icon
     if (el.btnRecAns) {
@@ -410,14 +482,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.ansRecorder && state.ansRecorder.state !== "inactive") state.ansRecorder.stop();
     } catch {}
 
-    // disable record while submitting
     setControlsEnabled({ record: false });
-
-    // show dots while processing
     setScoreLine("Processing…");
     setAiLoading(true);
 
-    // return button icon to mic immediately
     if (el.btnRecAns) {
       el.btnRecAns.classList.remove("is-recording");
       const icon = el.btnRecAns.querySelector("i");
@@ -455,7 +523,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const questionId = q.id || q.question_id || "";
+    const questionId = getQuestionId(q);
     if (!questionId) {
       alert("Question id missing.");
       setAiLoading(false);
@@ -496,14 +564,21 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // done
     setAiLoading(false);
 
-    // minimal status
     if (data.final_overall_0_10 !== undefined && data.final_overall_0_10 !== null) {
       setScoreLine(`Saved ✅ Overall: ${data.final_overall_0_10}/10`);
     } else {
       setScoreLine("Saved ✅");
+    }
+
+    const isLast = state.qIndex >= (state.questions.length - 1);
+    if (isLast) {
+      setTimeout(() => {
+        state.qIndex += 1;
+        renderQuestion(); // calls openResultsOnce()
+      }, state.autoNextDelayMs);
+      return;
     }
 
     setTimeout(() => nextQuestion(), state.autoNextDelayMs);
@@ -533,8 +608,14 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleMic();
   });
 
-  // screen record toggle (optional)
   el.btnRecord?.addEventListener("click", toggleScreenRecording);
+
+  // ✅ End → Results popup
+  el.btnEnd?.addEventListener("click", () => {
+    if (!state.resultsUrl) return;
+    state.resultsOpened = true;
+    openCenteredPopup(state.resultsUrl, { fallbackToRedirect: true });
+  });
 
   // ---------------- Start ----------------
   if (hasOptionAI) {
@@ -542,9 +623,6 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (!state.questions.length) setScoreLine("⚠️ No questions for this role.");
 
     el.btnRecAns?.addEventListener("click", toggleAnswerRecording);
-
-    if (el.btnResults && state.resultsUrl) el.btnResults.href = state.resultsUrl;
-
     renderQuestion();
   }
 });

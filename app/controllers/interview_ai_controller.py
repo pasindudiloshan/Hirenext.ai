@@ -41,7 +41,6 @@ def _ensure_attempt_doc(interview_id: str, role: str) -> Dict[str, Any]:
     """
     Ensure an interview_attempts doc exists for this scheduled interview.
     We use: session_id == interview_id (scheduled interview _id).
-
     Uses upsert for safety.
     """
     coll = _db().interview_attempts
@@ -55,6 +54,7 @@ def _ensure_attempt_doc(interview_id: str, role: str) -> Dict[str, Any]:
         "final_score": None,   # aggregate 0-10
         "summary": None,
         "status": "IN_PROGRESS",
+        "updated_at": _now_iso(),
     }
 
     coll.update_one(
@@ -67,12 +67,18 @@ def _ensure_attempt_doc(interview_id: str, role: str) -> Dict[str, Any]:
 
 
 def _merge_final_score(answers: List[Dict[str, Any]]) -> float:
-    """Mean of per-question final_score_0_10."""
+    """Mean of per-question final_score_0_10 (fallback rubric_score)."""
     scores: List[float] = []
     for a in answers or []:
         v = a.get("final_score_0_10")
         if isinstance(v, (int, float)):
             scores.append(float(v))
+            continue
+        # fallback
+        rv = a.get("rubric_score")
+        if isinstance(rv, (int, float)):
+            scores.append(float(rv))
+
     if not scores:
         return 0.0
     return round(sum(scores) / len(scores), 2)
@@ -120,7 +126,6 @@ def _compute_hybrid_score(a: Dict[str, Any], b: Dict[str, Any]) -> Tuple[float, 
     mode_used = "A_ONLY"
 
     if mode_cfg != "A_ONLY" and isinstance(b.get("score_0_10"), (int, float)):
-        # Blend weights (tweak anytime)
         final_0_10 = round(0.65 * a_score + 0.35 * float(b["score_0_10"]), 2)
         mode_used = "HYBRID"
 
@@ -138,9 +143,9 @@ def submit_answer():
       - question_id
       - audio
 
-    NEW behavior for your desired UX:
-      ✅ We still SAVE full breakdown to Mongo for the Results page
-      ✅ But we RETURN minimal JSON (fast + no “matched/missing” during interview)
+    UX behavior:
+      ✅ Save full breakdown to Mongo for Results page
+      ✅ Return minimal JSON (no breakdown UI during interview)
     """
     interview_id = (request.form.get("interview_id") or "").strip()
     role = (request.form.get("role") or "").strip()
@@ -166,7 +171,7 @@ def submit_answer():
     # 1) STT
     transcript, stt_meta = STTService.transcribe(audio)
 
-    # 2) Option A scoring (full breakdown for DB)
+    # 2) Option A scoring
     a = EvaluatorService.evaluate_answer(question=q, answer_text=transcript)
 
     # 3) Option B scoring (optional)
@@ -180,12 +185,23 @@ def submit_answer():
     # 4) Hybrid final score
     final_0_10, mode_used = _compute_hybrid_score(a=a, b=b)
 
+    # --- Ensure stt_meta is JSON-serializable dict
+    if isinstance(stt_meta, dict):
+        stt_meta_dict = stt_meta
+    else:
+        stt_meta_dict = getattr(stt_meta, "to_dict", lambda: {"raw": str(stt_meta)})()
+
+    # ✅ Store question text for Results UI
+    q_text = (q.get("question") or q.get("question_text") or "").strip()
+
     # 5) Save full row (for Results page)
     row: Dict[str, Any] = {
         "question_id": question_id,
+        "question_text": q_text,   # ✅ NEW for results page
+
         "transcript": transcript,
 
-        # Option A (full)
+        # Option A
         "rubric_score": a.get("rubric_score", 0),
         "concept_correct": a.get("concept_correct", False),
         "awarded_points": a.get("awarded_points", []),
@@ -195,7 +211,7 @@ def submit_answer():
         "red_flags_triggered": a.get("red_flags_triggered", []),
         "feedback": a.get("feedback", ""),
 
-        # Option B (optional)
+        # Option B
         "model_label": b.get("label"),
         "model_quality": b.get("quality"),
         "model_score_0_10": b.get("score_0_10"),
@@ -206,7 +222,7 @@ def submit_answer():
         "mode_used": mode_used,
 
         # STT metadata
-        "stt_meta": stt_meta if isinstance(stt_meta, dict) else getattr(stt_meta, "to_dict", lambda: stt_meta)(),
+        "stt_meta": stt_meta_dict,
 
         "created_at": _now_iso(),
     }
@@ -223,14 +239,12 @@ def submit_answer():
         {"$set": {"final_score": avg, "updated_at": _now_iso()}}
     )
 
-    # 7) RETURN MINIMAL RESPONSE (for new interview UX)
-    #    (Your updated interview.js will auto-next; no breakdown UI needed)
+    # 7) Return minimal response
     return jsonify({
         "ok": True,
         "interview_id": interview_id,
         "role": role,
         "question_id": question_id,
-        "transcript": transcript,
         "final_overall_0_10": avg,
     })
 
@@ -239,17 +253,33 @@ def submit_answer():
 def results(interview_id: str):
     """
     Results page for a scheduled interview.
-    Shows ALL breakdown saved per question.
+    Renders: templates/feedback/interview_results.html
     """
-    doc = _db().interview_attempts.find_one({"session_id": interview_id}) or {}
-    answers: List[Dict[str, Any]] = doc.get("answers") or []
+    doc = _db().interview_attempts.find_one({"session_id": interview_id})
 
+    # If someone opens results before any submit-answer call,
+    # ensure attempt doc exists so template doesn't crash.
+    if not doc:
+        doc = _ensure_attempt_doc(interview_id=interview_id, role="")
+
+    answers: List[Dict[str, Any]] = doc.get("answers") or []
     avg = _merge_final_score(answers)
+
+    # ✅ Set completed_at only once (do NOT overwrite on refresh)
+    update_fields: Dict[str, Any] = {
+        "final_score": avg,
+        "status": "COMPLETED",
+        "updated_at": _now_iso(),
+    }
+    if not doc.get("completed_at"):
+        update_fields["completed_at"] = _now_iso()
 
     _db().interview_attempts.update_one(
         {"session_id": interview_id},
-        {"$set": {"final_score": avg, "status": "COMPLETED", "completed_at": _now_iso()}}
+        {"$set": update_fields}
     )
 
-    # ✅ FIXED TEMPLATE PATH (your uploaded template is interview_ai/interview_results.html)
+    # re-fetch updated doc (optional but keeps values consistent)
+    doc = _db().interview_attempts.find_one({"session_id": interview_id}) or doc
+
     return render_template("feedback/interview_results.html", doc=doc, final_score=avg)
