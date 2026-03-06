@@ -1,26 +1,19 @@
-/* static/js/interview.js — UPDATED (Popup Results + new flow + nicer popup size) ✅
+/* static/js/interview.js — FULL UPDATED (MediaPipe Face Detection)
    ✅ Timer, cam/mic toggles, optional screen-record download
-   ✅ NEW interview flow:
-      - Auto TTS on each question
-      - Record button toggles: start -> stop -> auto submit -> auto next
-      - During interview: no rubric breakdown UI
-      - AI panel shows LOADING DOTS while processing
-
-   ✅ NEW RESULTS POPUP:
-      - End button opens results in centered popup (separate page)
-      - When last question completes, tries to open popup (fallback redirect)
-
-   ✅ POPUP SIZE:
-      - Fixed 1180x760 (similar to your screenshot)
-      - Attempts to hide toolbar/menubar/location (browser may ignore some)
-
-   ✅ IMPORTANT:
-      - Uses window.openCenteredPopup from interview.html IF available
-      - Has internal fallback popup helper if not available
+   ✅ Auto TTS on each question
+   ✅ Record button toggles: start -> stop -> auto submit -> auto next
+   ✅ AI panel shows loading dots while processing
+   ✅ End interview opens results in centered popup
+   ✅ FER upgraded with MediaPipe:
+      - Detects face in frontend
+      - Draws face box if overlay canvas exists
+      - Crops face only before sending to backend
+      - Updates emotion label + confidence
+      - Sends emotion summary with answer submit
+   ✅ Debug logs added so you can verify what is happening
 */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // ---------------- Elements ----------------
   const el = {
     timer: document.getElementById("ivTimer"),
     recDot: document.getElementById("ivRecDot"),
@@ -29,59 +22,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
     video: document.getElementById("candidateVideo"),
     overlay: document.getElementById("videoOverlay"),
+    emotionOverlay: document.getElementById("emotionOverlay"),
 
-    // Optional transcript text (hidden in HTML by default)
     transcriptNow: document.getElementById("transcriptNow"),
-
-    // ✅ AI loading dots
     aiDots: document.getElementById("aiDots"),
 
     btnToggleCam: document.getElementById("btnToggleCam"),
     btnToggleMic: document.getElementById("btnToggleMic"),
-    btnRecord: document.getElementById("btnRecord"), // screen record (optional)
+    btnRecord: document.getElementById("btnRecord"),
 
     qMeta: document.getElementById("qMeta"),
     qText: document.getElementById("qText"),
     scoreLine: document.getElementById("scoreLine"),
 
     btnRecAns: document.getElementById("btnRecAns"),
-
-    // ✅ End interview button (popup results)
     btnEnd: document.getElementById("btnEndInterview"),
+
+    emotionBadge: document.getElementById("emotionBadge"),
+    emotionText: document.getElementById("emotionText"),
+    emotionConf: document.getElementById("emotionConf"),
   };
 
-  // ---------------- Context ----------------
   const ctxAi = window.__INTERVIEW_AI_CTX__ || {};
   const ctxLegacy = window.__INTERVIEW_CTX__ || {};
   const hasOptionAI = !!(el.btnRecAns || el.qText);
 
-  // ---------------- State ----------------
   const state = {
     startedAt: Date.now(),
     timerT: null,
 
-    // cam/mic preview stream (video+audio)
     camStream: null,
     camOn: false,
     micOn: false,
 
-    // screen recording (optional)
     recOn: false,
     screenStream: null,
     screenRecorder: null,
     recChunks: [],
 
-    // answer recording (audio only)
     ansRecOn: false,
     ansStream: null,
     ansRecorder: null,
     ansChunks: [],
     lastAnswerBlob: null,
 
-    // submitting lock
     submitting: false,
 
-    // question flow
     questions: Array.isArray(ctxAi.questions) ? ctxAi.questions : [],
     role: String(ctxAi.role || ""),
     interviewId: String(ctxAi.interviewId || ctxAi.sessionId || ctxLegacy.interviewId || ""),
@@ -89,21 +75,64 @@ document.addEventListener("DOMContentLoaded", () => {
     resultsUrl: String(ctxAi.resultsUrl || ""),
     qIndex: 0,
 
-    // UX tuning
     autoSpeakDelayMs: 350,
     autoNextDelayMs: 350,
 
-    // Results popup: ensure we open once
     resultsOpened: false,
+
+    emotion: {
+      enabled: true,
+      debug: true,
+      predictUrl: String((ctxAi.emotionPredictUrl || "") || "/emotion/predict"),
+      intervalMs: Number(ctxAi.emotionIntervalMs || 2000),
+      inFlight: false,
+      t: null,
+
+      lastLabel: "",
+      lastConfidence: 0,
+      counts: {},
+
+      lastTs: 0,
+      errors: 0,
+      maxErrorsBeforeStop: 8,
+
+      detector: null,
+      detectorReady: false,
+      lastFaceBox: null,
+      paddingRatio: 0.18,
+      fallbackToFullFrame: true,
+      minDetectionScore: 0.5,
+    },
   };
 
-  // ---------------- Utils ----------------
+  function dlog(...args) {
+    if (state.emotion.debug) console.log("[FER]", ...args);
+  }
+
+  function dwarn(...args) {
+    if (state.emotion.debug) console.warn("[FER]", ...args);
+  }
+
+  function derror(...args) {
+    if (state.emotion.debug) console.error("[FER]", ...args);
+  }
+
+  dlog("DOM loaded");
+  dlog("emotionOverlay exists:", !!el.emotionOverlay);
+  dlog("candidateVideo exists:", !!el.video);
+  dlog("MediaPipe FaceDetection exists:", !!window.FaceDetection);
+
   const pad = (n) => String(n).padStart(2, "0");
+
   function fmtTime(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
     const mm = Math.floor(s / 60);
     const ss = s % 60;
     return `${pad(mm)}:${pad(ss)}`;
+  }
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
   }
 
   function startTimer() {
@@ -115,20 +144,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   startTimer();
 
-  // ---------------- Centered popup helper ----------------
-  // Prefer the global helper from interview.html (window.openCenteredPopup),
-  // but keep a fallback here so interview.js never breaks.
   function openCenteredPopupFallback(url, { fallbackToRedirect = true } = {}) {
     if (!url) return null;
 
-    // ✅ Fixed size like your screenshot
     const w = 1180;
     const h = 760;
-
     const left = Math.floor((window.screen.width - w) / 2);
     const top = Math.floor((window.screen.height - h) / 2);
 
-    // ✅ Try to reduce chrome (browser may ignore some options)
     const features = [
       `width=${w}`,
       `height=${h}`,
@@ -144,7 +167,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const win = window.open(url, "InterviewResults", features);
 
-    // Popup blocked → fallback
     if (!win || win.closed || typeof win.closed === "undefined") {
       if (fallbackToRedirect) window.location.href = url;
       return null;
@@ -155,13 +177,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function openCenteredPopup(url, opts) {
-    // ✅ If you defined window.openCenteredPopup in interview.html, use it
     if (typeof window.openCenteredPopup === "function") {
-      const win = window.openCenteredPopup(url);
-      // If popup blocked, interview.html helper already redirects; just return
-      return win;
+      return window.openCenteredPopup(url);
     }
-    // else use fallback that supports the same behavior
     return openCenteredPopupFallback(url, opts);
   }
 
@@ -170,12 +188,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.resultsUrl) return;
 
     state.resultsOpened = true;
-
-    // Auto-open may be blocked (not user gesture). Fallback redirect ensures results show.
+    stopEmotionLoop();
+    clearFaceOverlay();
     openCenteredPopup(state.resultsUrl, { fallbackToRedirect: true });
   }
 
-  // ---------------- AI loading dots control ----------------
   function setAiLoading(isLoading) {
     if (el.aiDots) el.aiDots.style.display = isLoading ? "flex" : "none";
 
@@ -187,7 +204,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   setAiLoading(false);
 
-  // ---------------- Optional transcript helper ----------------
   function setTranscriptNow(text) {
     if (!el.transcriptNow) return;
     el.transcriptNow.textContent = String(text || "");
@@ -203,7 +219,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el.btnRecAns) el.btnRecAns.disabled = !record;
   }
 
-  // ---------------- Screen-record UI pill ----------------
   function setRec(on) {
     state.recOn = on;
     if (!el.recText || !el.recDot) return;
@@ -217,7 +232,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   setRec(false);
 
-  // ---------------- Permissions (cam/mic preview) ----------------
   async function enableCamMic() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -236,6 +250,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       updateCamIcon();
       updateMicIcon();
+
+      await initFaceDetector();
+
+      dlog("Camera enabled");
+      dlog("video:", el.video);
+      dlog("overlay canvas:", el.emotionOverlay);
+
+      startEmotionLoop();
       return true;
     } catch (e) {
       console.error(e);
@@ -260,23 +282,482 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.camStream) return;
     const t = state.camStream.getVideoTracks()[0];
     if (!t) return;
+
     t.enabled = !t.enabled;
     state.camOn = t.enabled;
 
     if (el.overlay) el.overlay.style.display = state.camOn ? "none" : "flex";
     updateCamIcon();
+
+    if (state.camOn) startEmotionLoop();
+    else {
+      stopEmotionLoop();
+      clearFaceOverlay();
+      hideEmotionUI();
+    }
   }
 
   function toggleMic() {
     if (!state.camStream) return;
     const t = state.camStream.getAudioTracks()[0];
     if (!t) return;
+
     t.enabled = !t.enabled;
     state.micOn = t.enabled;
     updateMicIcon();
   }
 
-  // ---------------- Screen Recording (optional) ----------------
+  function hideEmotionUI() {
+    if (el.emotionText) el.emotionText.textContent = "—";
+    if (el.emotionConf) el.emotionConf.textContent = "";
+    if (el.emotionBadge) el.emotionBadge.style.display = "none";
+  }
+
+  function setEmotionUI(label, conf, faceBox = null) {
+    if (el.emotionText) el.emotionText.textContent = label ? String(label) : "—";
+    if (el.emotionConf) el.emotionConf.textContent = conf ? `${Math.round(conf * 100)}%` : "";
+
+    if (el.emotionBadge) {
+      el.emotionBadge.style.display = label ? "flex" : "none";
+      el.emotionBadge.style.opacity = label ? "1" : "0.75";
+
+      if (faceBox && el.video) {
+        positionEmotionBadge(faceBox);
+      } else {
+        el.emotionBadge.style.top = "14px";
+        el.emotionBadge.style.left = "14px";
+      }
+    }
+  }
+
+  function positionEmotionBadge(faceBox) {
+    if (!el.emotionBadge || !el.video || !faceBox) return;
+
+    const vw = el.video.clientWidth || 1;
+    const vh = el.video.clientHeight || 1;
+    const sx = vw / (el.video.videoWidth || vw);
+    const sy = vh / (el.video.videoHeight || vh);
+
+    const badgeX = Math.max(10, Math.round(faceBox.x * sx));
+    const badgeY = Math.max(10, Math.round(faceBox.y * sy) - 54);
+
+    el.emotionBadge.style.left = `${badgeX}px`;
+    el.emotionBadge.style.top = `${badgeY}px`;
+  }
+
+  async function initFaceDetector() {
+    try {
+      dlog("Initializing MediaPipe Face Detection...");
+
+      if (!window.FaceDetection) {
+        throw new Error("MediaPipe FaceDetection not loaded");
+      }
+
+      const detector = new window.FaceDetection({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`,
+      });
+
+      detector.setOptions({
+        model: "short",
+        minDetectionConfidence: state.emotion.minDetectionScore,
+      });
+
+      detector.onResults((results) => {
+        state.emotion._latestResults = results || null;
+      });
+
+      state.emotion.detector = detector;
+      state.emotion.detectorReady = true;
+
+      dlog("MediaPipe Face Detection initialized");
+      return true;
+    } catch (e) {
+      dwarn("MediaPipe init failed:", e);
+      state.emotion.detector = null;
+      state.emotion.detectorReady = false;
+      return false;
+    }
+  }
+
+  function getVideoFrameSize(videoEl) {
+    const w = videoEl?.videoWidth || 0;
+    const h = videoEl?.videoHeight || 0;
+    return { w, h };
+  }
+
+  async function detectFaceBox(videoEl) {
+    if (!videoEl) {
+      dwarn("detectFaceBox: no video element");
+      return null;
+    }
+
+    if (videoEl.readyState < 2) {
+      dwarn("detectFaceBox: video not ready");
+      return null;
+    }
+
+    const { w, h } = getVideoFrameSize(videoEl);
+    if (!w || !h) {
+      dwarn("detectFaceBox: invalid video size", w, h);
+      return null;
+    }
+
+    if (!state.emotion.detectorReady || !state.emotion.detector) {
+      dwarn("detectFaceBox: detector not ready");
+      return null;
+    }
+
+    try {
+      state.emotion._latestResults = null;
+
+      await state.emotion.detector.send({ image: videoEl });
+
+      const results = state.emotion._latestResults;
+      const detections = results?.detections || [];
+
+      dlog("MediaPipe detections:", detections);
+
+      if (!Array.isArray(detections) || !detections.length) {
+        dwarn("no face detected");
+        return null;
+      }
+
+      let best = null;
+      let bestArea = 0;
+
+      for (const det of detections) {
+        const box = det?.boundingBox;
+        if (!box) continue;
+
+        const bx = Number(box.xCenter || 0) - Number(box.width || 0) / 2;
+        const by = Number(box.yCenter || 0) - Number(box.height || 0) / 2;
+        const bw = Number(box.width || 0);
+        const bh = Number(box.height || 0);
+
+        if (bw <= 0 || bh <= 0) continue;
+
+        const px = bx * w;
+        const py = by * h;
+        const pw = bw * w;
+        const ph = bh * h;
+        const area = pw * ph;
+
+        if (area > bestArea) {
+          bestArea = area;
+          best = { x: px, y: py, width: pw, height: ph };
+        }
+      }
+
+      if (!best) {
+        dwarn("detections returned, but none usable");
+        return null;
+      }
+
+      const padX = best.width * state.emotion.paddingRatio;
+      const padY = best.height * state.emotion.paddingRatio;
+
+      const x = clamp(Math.round(best.x - padX), 0, w - 1);
+      const y = clamp(Math.round(best.y - padY), 0, h - 1);
+      const right = clamp(Math.round(best.x + best.width + padX), 1, w);
+      const bottom = clamp(Math.round(best.y + best.height + padY), 1, h);
+
+      const out = {
+        x,
+        y,
+        width: Math.max(1, right - x),
+        height: Math.max(1, bottom - y),
+      };
+
+      state.emotion.lastFaceBox = out;
+      dlog("face box:", out);
+      return out;
+    } catch (e) {
+      dwarn("MediaPipe detection failed:", e);
+      return null;
+    }
+  }
+
+  function resizeOverlayCanvas() {
+    if (!el.emotionOverlay || !el.video) return;
+
+    const rect = el.video.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    el.emotionOverlay.width = Math.max(1, Math.round(rect.width * dpr));
+    el.emotionOverlay.height = Math.max(1, Math.round(rect.height * dpr));
+    el.emotionOverlay.style.width = `${Math.round(rect.width)}px`;
+    el.emotionOverlay.style.height = `${Math.round(rect.height)}px`;
+
+    dlog("overlay resized:", {
+      width: el.emotionOverlay.width,
+      height: el.emotionOverlay.height,
+      cssWidth: el.emotionOverlay.style.width,
+      cssHeight: el.emotionOverlay.style.height,
+    });
+  }
+
+  function clearFaceOverlay() {
+    if (!el.emotionOverlay) return;
+    const ctx = el.emotionOverlay.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, el.emotionOverlay.width, el.emotionOverlay.height);
+  }
+
+  function drawFaceOverlay(faceBox, label = "", confidence = 0) {
+    if (!el.emotionOverlay || !el.video || !faceBox) return;
+
+    resizeOverlayCanvas();
+
+    const ctx = el.emotionOverlay.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const vw = el.video.clientWidth || 1;
+    const vh = el.video.clientHeight || 1;
+    const sx = (vw * dpr) / (el.video.videoWidth || vw);
+    const sy = (vh * dpr) / (el.video.videoHeight || vh);
+
+    const x = faceBox.x * sx;
+    const y = faceBox.y * sy;
+    const w = faceBox.width * sx;
+    const h = faceBox.height * sy;
+
+    ctx.clearRect(0, 0, el.emotionOverlay.width, el.emotionOverlay.height);
+    ctx.save();
+
+    ctx.lineWidth = 3 * dpr;
+    ctx.strokeStyle = "#22c55e";
+    ctx.shadowColor = "rgba(34,197,94,.35)";
+    ctx.shadowBlur = 16 * dpr;
+    ctx.strokeRect(x, y, w, h);
+
+    if (label) {
+      const text = confidence
+        ? `${String(label)} ${Math.round(confidence * 100)}%`
+        : String(label);
+
+      ctx.font = `${14 * dpr}px sans-serif`;
+      const textW = ctx.measureText(text).width;
+      const chipPadX = 10 * dpr;
+      const chipH = 28 * dpr;
+      const chipW = textW + chipPadX * 2;
+
+      const chipX = x;
+      const chipY = Math.max(6 * dpr, y - chipH - 8 * dpr);
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(15,23,42,.88)";
+      roundRect(ctx, chipX, chipY, chipW, chipH, 10 * dpr);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(250,204,21,.9)";
+      ctx.lineWidth = 2 * dpr;
+      roundRect(ctx, chipX, chipY, chipW, chipH, 10 * dpr);
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, chipX + chipPadX, chipY + chipH / 2);
+    }
+
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function captureVideoFrameBase64(videoEl) {
+    if (!videoEl) return "";
+    if (videoEl.readyState < 2) return "";
+
+    const w = videoEl.videoWidth || 0;
+    const h = videoEl.videoHeight || 0;
+    if (!w || !h) return "";
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+
+    ctx.drawImage(videoEl, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.75);
+  }
+
+  function captureCroppedFaceBase64(videoEl, faceBox) {
+    if (!videoEl || !faceBox) return "";
+
+    const vw = videoEl.videoWidth || 0;
+    const vh = videoEl.videoHeight || 0;
+    if (!vw || !vh) return "";
+
+    const sx = clamp(Math.round(faceBox.x), 0, vw - 1);
+    const sy = clamp(Math.round(faceBox.y), 0, vh - 1);
+    const sw = clamp(Math.round(faceBox.width), 1, vw - sx);
+    const sh = clamp(Math.round(faceBox.height), 1, vh - sy);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+
+    ctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, sw, sh);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  }
+
+  async function captureBestEmotionImage(videoEl) {
+    const faceBox = await detectFaceBox(videoEl);
+
+    if (faceBox) {
+      const cropped = captureCroppedFaceBase64(videoEl, faceBox);
+      if (cropped) {
+        dlog("capture source: face-crop", faceBox);
+        return {
+          image: cropped,
+          faceBox,
+          source: "face-crop",
+        };
+      }
+      dwarn("face detected but crop failed");
+    }
+
+    if (state.emotion.fallbackToFullFrame) {
+      const full = captureVideoFrameBase64(videoEl);
+      if (full) {
+        dwarn("capture source: full-frame");
+        return {
+          image: full,
+          faceBox: null,
+          source: "full-frame",
+        };
+      }
+    }
+
+    dwarn("capture source: none");
+    return { image: "", faceBox: null, source: "none" };
+  }
+
+  async function predictEmotionOnce() {
+    if (!state.emotion.enabled) return;
+    if (!state.camOn) return;
+    if (!el.video) return;
+    if (state.emotion.inFlight) return;
+    if (state.resultsOpened) return;
+
+    state.emotion.lastTs = Date.now();
+    state.emotion.inFlight = true;
+
+    try {
+      const capture = await captureBestEmotionImage(el.video);
+      dlog("predictEmotionOnce capture:", capture.source, capture.faceBox);
+
+      if (!capture.image) {
+        clearFaceOverlay();
+        return;
+      }
+
+      const res = await fetch(state.emotion.predictUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          image: capture.image,
+          top_k: 3,
+          debug: true,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      dlog("backend response:", data);
+      dlog("backend image_source:", data.image_source);
+      dlog("backend face_detected:", data.face_detected);
+      dlog("backend face_box:", data.face_box);
+
+      if (!res.ok || !data.ok) {
+        state.emotion.errors += 1;
+        dwarn("backend error:", data);
+        if (state.emotion.errors >= state.emotion.maxErrorsBeforeStop) {
+          stopEmotionLoop();
+        }
+        return;
+      }
+
+      const label = String(data.label || "");
+      const confidence = Number(data.confidence || 0);
+
+      state.emotion.lastLabel = label;
+      state.emotion.lastConfidence = confidence;
+
+      if (label) {
+        state.emotion.counts[label] = (state.emotion.counts[label] || 0) + 1;
+      }
+
+      if (capture.faceBox) {
+        drawFaceOverlay(capture.faceBox, label, confidence);
+        setEmotionUI(label, confidence, capture.faceBox);
+      } else if (data.face_box) {
+        drawFaceOverlay(data.face_box, label, confidence);
+        setEmotionUI(label, confidence, data.face_box);
+      } else {
+        clearFaceOverlay();
+        setEmotionUI(label, confidence, null);
+      }
+    } catch (e) {
+      derror("Emotion predict error:", e);
+      state.emotion.errors += 1;
+      if (state.emotion.errors >= state.emotion.maxErrorsBeforeStop) {
+        stopEmotionLoop();
+      }
+    } finally {
+      state.emotion.inFlight = false;
+    }
+  }
+
+  function startEmotionLoop() {
+    if (!state.emotion.enabled) return;
+    if (!state.camOn) return;
+    if (state.emotion.t) return;
+
+    dlog("Starting emotion loop");
+
+    if (el.emotionBadge || el.emotionText || el.emotionConf) {
+      setEmotionUI(
+        state.emotion.lastLabel || "",
+        state.emotion.lastConfidence || 0,
+        state.emotion.lastFaceBox
+      );
+    }
+
+    state.emotion.t = setInterval(() => {
+      predictEmotionOnce();
+    }, state.emotion.intervalMs);
+
+    setTimeout(() => {
+      predictEmotionOnce();
+    }, 600);
+  }
+
+  function stopEmotionLoop() {
+    if (state.emotion.t) clearInterval(state.emotion.t);
+    state.emotion.t = null;
+    state.emotion.inFlight = false;
+    dlog("Stopped emotion loop");
+  }
+
   async function startScreenRecording() {
     if (state.recOn) return;
 
@@ -288,7 +769,6 @@ document.addEventListener("DOMContentLoaded", () => {
       screen.getVideoTracks().forEach((t) => mixed.addTrack(t));
       screen.getAudioTracks().forEach((t) => mixed.addTrack(t));
 
-      // mix mic from camStream if present
       if (state.camStream) {
         const mic = state.camStream.getAudioTracks()[0];
         if (mic) mixed.addTrack(mic);
@@ -328,14 +808,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!state.recOn) return;
 
     try {
-      if (state.screenRecorder && state.screenRecorder.state !== "inactive") state.screenRecorder.stop();
+      if (state.screenRecorder && state.screenRecorder.state !== "inactive") {
+        state.screenRecorder.stop();
+      }
     } catch {}
 
     try {
       (state.screenStream?.getTracks() || []).forEach((t) => t.stop());
     } catch {}
-    state.screenStream = null;
 
+    state.screenStream = null;
     setRec(false);
   }
 
@@ -344,7 +826,6 @@ document.addEventListener("DOMContentLoaded", () => {
     else startScreenRecording();
   }
 
-  // ---------------- Question helpers ----------------
   function curQuestion() {
     return state.questions[state.qIndex] || null;
   }
@@ -354,7 +835,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return String(q.id || q.question_id || q._id || "").trim();
   }
 
-  // ---------------- Browser TTS ----------------
   function speak(text) {
     const msg = String(text || "");
     if (!msg.trim()) return;
@@ -381,7 +861,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const q = curQuestion();
 
-    // ✅ finished all questions
     if (!q) {
       if (el.qMeta) el.qMeta.textContent = "All questions completed ✅";
       if (el.qText) el.qText.textContent = "Results will open in a popup.";
@@ -390,7 +869,6 @@ document.addEventListener("DOMContentLoaded", () => {
       setScoreLine("Interview completed ✅");
       setAiLoading(false);
 
-      // Auto open results (best effort)
       openResultsOnce();
       return;
     }
@@ -401,7 +879,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     state.lastAnswerBlob = null;
 
-    // reset record button icon
     if (el.btnRecAns) {
       el.btnRecAns.classList.remove("is-recording");
       const icon = el.btnRecAns.querySelector("i");
@@ -415,12 +892,20 @@ document.addEventListener("DOMContentLoaded", () => {
     autoSpeakCurrentQuestion();
   }
 
-  // ---------------- Audio Answer Recording ----------------
   function pickBestAudioMime() {
-    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"];
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg",
+    ];
+
     for (const c of candidates) {
-      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) {
+        return c;
+      }
     }
+
     return "";
   }
 
@@ -439,8 +924,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const mimeType = pickBestAudioMime();
     let rec;
+
     try {
-      rec = mimeType ? new MediaRecorder(state.ansStream, { mimeType }) : new MediaRecorder(state.ansStream);
+      rec = mimeType
+        ? new MediaRecorder(state.ansStream, { mimeType })
+        : new MediaRecorder(state.ansStream);
     } catch (e) {
       console.error(e);
       alert("Recording is not supported in this browser.");
@@ -462,7 +950,6 @@ document.addEventListener("DOMContentLoaded", () => {
     rec.start();
     state.ansRecOn = true;
 
-    // recording UI
     if (el.btnRecAns) {
       el.btnRecAns.classList.add("is-recording");
       const icon = el.btnRecAns.querySelector("i");
@@ -479,7 +966,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.ansRecOn = false;
 
     try {
-      if (state.ansRecorder && state.ansRecorder.state !== "inactive") state.ansRecorder.stop();
+      if (state.ansRecorder && state.ansRecorder.state !== "inactive") {
+        state.ansRecorder.stop();
+      }
     } catch {}
 
     setControlsEnabled({ record: false });
@@ -503,7 +992,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ---------------- Submit Answer (AUTO) ----------------
   async function submitAnswerAuto() {
     const q = curQuestion();
     if (!q) return;
@@ -541,9 +1029,17 @@ document.addEventListener("DOMContentLoaded", () => {
     fd.append("question_id", questionId);
     fd.append("audio", state.lastAnswerBlob, "answer.webm");
 
+    fd.append("emotion_label", String(state.emotion.lastLabel || ""));
+    fd.append("emotion_confidence", String(state.emotion.lastConfidence || 0));
+    fd.append("emotion_counts_json", JSON.stringify(state.emotion.counts || {}));
+
     let res, data;
     try {
-      res = await fetch(state.submitUrl, { method: "POST", body: fd, credentials: "same-origin" });
+      res = await fetch(state.submitUrl, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+      });
       data = await res.json().catch(() => ({}));
     } catch (e) {
       console.error(e);
@@ -576,7 +1072,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isLast) {
       setTimeout(() => {
         state.qIndex += 1;
-        renderQuestion(); // calls openResultsOnce()
+        renderQuestion();
       }, state.autoNextDelayMs);
       return;
     }
@@ -589,7 +1085,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderQuestion();
   }
 
-  // ---------------- Wiring: cam/mic ----------------
   el.btnToggleCam?.addEventListener("click", async () => {
     if (!state.camStream) {
       const ok = await enableCamMic();
@@ -610,14 +1105,54 @@ document.addEventListener("DOMContentLoaded", () => {
 
   el.btnRecord?.addEventListener("click", toggleScreenRecording);
 
-  // ✅ End → Results popup
   el.btnEnd?.addEventListener("click", () => {
     if (!state.resultsUrl) return;
     state.resultsOpened = true;
+    stopEmotionLoop();
+    clearFaceOverlay();
     openCenteredPopup(state.resultsUrl, { fallbackToRedirect: true });
   });
 
-  // ---------------- Start ----------------
+  window.addEventListener("resize", () => {
+    resizeOverlayCanvas();
+    if (state.emotion.lastFaceBox && state.emotion.lastLabel) {
+      drawFaceOverlay(
+        state.emotion.lastFaceBox,
+        state.emotion.lastLabel,
+        state.emotion.lastConfidence
+      );
+      positionEmotionBadge(state.emotion.lastFaceBox);
+    }
+  });
+
+  el.video?.addEventListener("loadedmetadata", () => {
+    dlog("video metadata loaded", {
+      videoWidth: el.video.videoWidth,
+      videoHeight: el.video.videoHeight,
+      clientWidth: el.video.clientWidth,
+      clientHeight: el.video.clientHeight,
+    });
+    resizeOverlayCanvas();
+  });
+
+  window.__FER_DRAW_TEST__ = function () {
+    if (!el.emotionOverlay) {
+      console.warn("No emotionOverlay canvas found");
+      return;
+    }
+    resizeOverlayCanvas();
+    const ctx = el.emotionOverlay.getContext("2d");
+    if (!ctx) {
+      console.warn("No canvas context");
+      return;
+    }
+    ctx.clearRect(0, 0, el.emotionOverlay.width, el.emotionOverlay.height);
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(40, 40, 220, 220);
+    console.log("Red test box drawn");
+  };
+
   if (hasOptionAI) {
     if (!state.role) setScoreLine("⚠️ Role missing in page context.");
     else if (!state.questions.length) setScoreLine("⚠️ No questions for this role.");

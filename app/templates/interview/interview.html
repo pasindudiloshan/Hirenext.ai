@@ -1,4 +1,4 @@
-{# templates/interview/interview.html — UPDATED for centered popup results #}
+{# templates/interview/interview.html — FULL UPDATED (MediaPipe Ready) #}
 {% extends "base.html" %}
 {% block title %}AI Interview Session{% endblock %}
 
@@ -9,7 +9,6 @@
 {% block content %}
 <div class="iv-page iv-clean">
 
-  <!-- TOP MINI BAR (REC + TIMER ONLY) -->
   <div class="iv-topbar">
     <div class="iv-pill" id="ivRecPill">
       <span class="iv-dot" id="ivRecDot"></span>
@@ -18,27 +17,35 @@
     <div class="iv-timer" id="ivTimer">00:00</div>
   </div>
 
-  <!-- TWO HUGE SCREENS -->
   <section class="iv-stage">
-    <!-- LEFT: AI -->
     <div class="iv-screen iv-screen-ai">
       <div class="iv-ai-wrap">
         <div class="iv-ai-ring" id="aiRing"></div>
-
-        <!-- centered mic icon (AI) -->
         <i class="fa-solid fa-microphone iv-fa-mic"></i>
 
         <div class="iv-ai-status" id="aiStatus">
-          <div class="iv-dots" id="aiDots" aria-label="AI is processing">
+          <div class="iv-dots" id="aiDots" aria-label="AI is processing" style="display:none;">
             <span></span><span></span><span></span>
           </div>
         </div>
-
       </div>
     </div>
 
-    <!-- RIGHT: CANDIDATE -->
     <div class="iv-screen iv-screen-user">
+      <div id="emotionBadge" aria-live="polite" aria-atomic="true">
+        <span class="emotion-badge-dot"></span>
+
+        <div class="emotion-badge-meta">
+          <div class="emotion-badge-label">Emotion</div>
+          <div class="emotion-badge-row">
+            <div id="emotionText">—</div>
+            <div id="emotionConf"></div>
+          </div>
+        </div>
+      </div>
+
+      <canvas id="emotionOverlay"></canvas>
+
       <video id="candidateVideo" autoplay playsinline muted></video>
 
       <div class="iv-video-overlay" id="videoOverlay">
@@ -50,20 +57,19 @@
     </div>
   </section>
 
-  <!-- ✅ MINIMAL QUESTION PANEL -->
   <section class="iv-qpanel iv-qpanel-min">
     <div class="iv-qmeta" id="qMeta">Loading...</div>
     <div class="iv-qtext" id="qText">Loading question...</div>
 
     <div class="iv-qactions iv-qactions-min">
-      <!-- BIG RECORD BUTTON -->
       <button class="iv-rec-big" id="btnRecAns" type="button" title="Record Answer">
         <i class="fa-solid fa-microphone"></i>
       </button>
     </div>
+
+    <div id="scoreLine" class="iv-scoreline"></div>
   </section>
 
-  <!-- BOTTOM DOCK (VIDEO / MIC / SCREEN-RECORD / END) -->
   <div class="iv-dock-lite">
     <button class="iv-dock-btn-lite" id="btnToggleCam" type="button" title="Camera">
       <i class="fa-solid fa-video"></i>
@@ -73,12 +79,10 @@
       <i class="fa-solid fa-microphone"></i>
     </button>
 
-    <!-- optional screen record -->
     <button class="iv-dock-btn-lite iv-record" id="btnRecord" type="button" title="Screen Record (optional)">
       <i class="fa-solid fa-circle"></i>
     </button>
 
-    <!-- ✅ End → Results (Popup) -->
     <button class="iv-dock-btn-lite iv-end" id="btnEndInterview" type="button" title="End & View Results">
       <i class="fa-solid fa-phone-slash"></i>
     </button>
@@ -98,23 +102,25 @@
     role: {{ (role or "")|tojson }},
     questions: {{ (questions or [])|tojson }},
     submitUrl: {{ (submit_url or "/interview-ai/submit-answer")|tojson }},
-    resultsUrl: {{ (results_url or end_url or "")|tojson }}
+    resultsUrl: {{ (results_url or end_url or "")|tojson }},
+    emotionPredictUrl: {{ (emotion_predict_url or "/emotion/predict")|tojson }},
+    emotionIntervalMs: {{ (emotion_interval_ms or 2000)|tojson }}
   };
 
-  // ✅ Popup helper (centered) — make it GLOBAL so interview.js can call it too
   window.openCenteredPopup = function (url) {
-    const w = Math.min(1100, Math.floor(window.screen.width * 0.9));
-    const h = Math.min(780, Math.floor(window.screen.height * 0.85));
+    if (!url) return null;
+
+    const w = 1180;
+    const h = 760;
     const left = Math.floor((window.screen.width - w) / 2);
     const top = Math.floor((window.screen.height - h) / 2);
 
     const win = window.open(
       url,
       "InterviewResults",
-      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no`
     );
 
-    // Popup blocked → fallback to normal navigation
     if (!win || win.closed || typeof win.closed === "undefined") {
       window.location.href = url;
       return null;
@@ -123,22 +129,11 @@
     win.focus();
     return win;
   };
-
-  // ✅ End button → open results as separate popup page
-  document.addEventListener("DOMContentLoaded", () => {
-    const btn = document.getElementById("btnEndInterview");
-
-    if (btn) {
-      btn.addEventListener("click", () => {
-        const url = (window.__INTERVIEW_AI_CTX__ || {}).resultsUrl || "";
-        if (!url) return;
-        window.openCenteredPopup(url);
-      });
-    }
-  });
 </script>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="{{ url_for('static', filename='js/interview.js') }}"></script>
 {% endblock %}

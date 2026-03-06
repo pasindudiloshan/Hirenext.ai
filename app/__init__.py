@@ -9,12 +9,12 @@ def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
     # ------------------------
-    # Load Config (app/config.py -> class Config)
+    # Load Config
     # ------------------------
     app.config.from_object("app.config.Config")
 
     # ------------------------
-    # Secret Key (sessions/flash)
+    # Secret Key
     # ------------------------
     app.secret_key = (
         app.config.get("SECRET_KEY")
@@ -32,6 +32,7 @@ def create_app():
 
     app.config["WHISPER_MODEL_SIZE"] = (
         os.environ.get("WHISPER_MODEL_SIZE")
+        or app.config.get("WHISPER_MODEL_SIZE")
         or "small"
     )
 
@@ -48,7 +49,43 @@ def create_app():
 
     app.config["AI_SCORING_MODE"] = (
         os.environ.get("AI_SCORING_MODE")
+        or app.config.get("AI_SCORING_MODE")
         or "HYBRID"
+    )
+
+    # ------------------------
+    # Emotion Recognition Config
+    # ------------------------
+    app.config["EMOTION_MODEL_PATH"] = (
+        os.environ.get("EMOTION_MODEL_PATH")
+        or app.config.get("EMOTION_MODEL_PATH")
+        or "app/ml_models/emotion_model.keras"
+    )
+
+    app.config["EMOTION_LABELS_PATH"] = (
+        os.environ.get("EMOTION_LABELS_PATH")
+        or app.config.get("EMOTION_LABELS_PATH")
+        or "app/ml_models/emotion_labels.json"
+    )
+
+    # ✅ Your trained model expects 128x128
+    app.config["EMOTION_INPUT_SIZE"] = (
+        os.environ.get("EMOTION_INPUT_SIZE")
+        or app.config.get("EMOTION_INPUT_SIZE")
+        or "128,128"
+    )
+
+    os.environ.setdefault(
+        "EMOTION_MODEL_PATH",
+        str(app.config["EMOTION_MODEL_PATH"])
+    )
+    os.environ.setdefault(
+        "EMOTION_LABELS_PATH",
+        str(app.config["EMOTION_LABELS_PATH"])
+    )
+    os.environ.setdefault(
+        "EMOTION_INPUT_SIZE",
+        str(app.config["EMOTION_INPUT_SIZE"])
     )
 
     # ------------------------
@@ -112,19 +149,19 @@ def create_app():
     # ------------------------
     # Register Blueprints
     # ------------------------
-
-    # ✅ ADD AUTH CONTROLLER HERE
     from app.controllers.auth_controller import auth_bp
     from app.controllers.job_controller import job_bp
     from app.controllers.resume_controller import resume_bp
     from app.controllers.interview_controller import interview_bp
     from app.controllers.interview_ai_controller import interview_ai_bp
+    from app.controllers.emotion_controller import emotion_bp
 
-    app.register_blueprint(auth_bp)  # /auth/*
-    app.register_blueprint(job_bp)   # /dashboard, /jobs
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(job_bp)
     app.register_blueprint(resume_bp, url_prefix="/screening")
     app.register_blueprint(interview_bp, url_prefix="/interview")
     app.register_blueprint(interview_ai_bp)
+    app.register_blueprint(emotion_bp)
 
     # ------------------------
     # Health Check
@@ -139,6 +176,9 @@ def create_app():
             ),
             "ai_mode": app.config.get("AI_SCORING_MODE"),
             "whisper_model": app.config.get("WHISPER_MODEL_SIZE"),
+            "emotion_model_path": app.config.get("EMOTION_MODEL_PATH"),
+            "emotion_labels_path": app.config.get("EMOTION_LABELS_PATH"),
+            "emotion_input_size": app.config.get("EMOTION_INPUT_SIZE"),
         }
 
     return app
