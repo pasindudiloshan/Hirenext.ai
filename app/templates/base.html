@@ -5,7 +5,7 @@
     <title>{% block title %}HireNext{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- ✅ Font Awesome (global) -->
+    <!-- Font Awesome (global) -->
     <script src="https://kit.fontawesome.com/e2638107b1.js" crossorigin="anonymous"></script>
 
     <!-- Base Layout CSS -->
@@ -24,7 +24,6 @@
             <i class="fa-solid fa-bars"></i>
         </button>
 
-        <!-- ✅ Brand: HireNext black, .ai blue -->
         <div class="logo">
             <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HireNext Logo">
             <span class="brand-text">
@@ -34,16 +33,15 @@
     </div>
 
     <nav class="topbar-nav">
-
         <a href="/dashboard"
            class="nav-link {% if request.path == '/' or request.path.startswith('/dashboard') %}active{% endif %}">
             Dashboard
         </a>
 
-<a href="{{ url_for('job_bp.list_jobs_page') }}"
-   class="nav-link {% if request.endpoint and request.endpoint.startswith('job_bp.') %}active{% endif %}">
-    Jobs
-</a>
+        <a href="{{ url_for('job_bp.list_jobs_page') }}"
+           class="nav-link {% if request.endpoint and request.endpoint.startswith('job_bp.') %}active{% endif %}">
+            Jobs
+        </a>
 
         <a href="/screening/new"
            class="nav-link {% if request.path.startswith('/screening') %}active{% endif %}">
@@ -57,17 +55,14 @@
     </nav>
 
     <div class="topbar-right">
-        <!-- Optional: replace T with your user initial -->
-        <div class="user-circle">{{ user_initial|default('T') }}</div>
+        <div class="user-circle">{{ user_initial|default('P') }}</div>
     </div>
 </header>
-
 
 <!-- =======================
      SIDEBAR
 ======================== -->
 <aside id="sidebar" class="sidebar">
-
     <div class="sidebar-top">
         <h3 class="sidebar-title">Navigation</h3>
 
@@ -82,7 +77,7 @@
 
             <li>
                 <a href="{{ url_for('job_bp.list_jobs_page') }}"
-                class="sidebar-link {% if request.endpoint and request.endpoint.startswith('job_bp.') %}active{% endif %}">
+                   class="sidebar-link {% if request.endpoint and request.endpoint.startswith('job_bp.') %}active{% endif %}">
                     <i class="fa-solid fa-briefcase"></i>
                     Jobs
                 </a>
@@ -116,21 +111,19 @@
 
     <div class="sidebar-bottom">
         <div class="profile-box">
-            <div class="profile-avatar">{{ user_initial|default('T') }}</div>
+            <div class="profile-avatar">{{ user_initial|default('P') }}</div>
             <div class="profile-info">
-                <p class="profile-name">{{ user_name|default('Tharun') }}</p>
+                <p class="profile-name">{{ user_name|default('Pasindu Dilshan') }}</p>
                 <small>{{ user_role|default('Administrator') }}</small>
             </div>
         </div>
 
-        <a href="/logout" class="logout-btn">
+        <a href="{{ url_for('auth_bp.logout') }}" id="logoutBtn" class="logout-btn" aria-label="Logout">
             <i class="fa-solid fa-right-from-bracket"></i>
             Logout
         </a>
     </div>
-
 </aside>
-
 
 <!-- =======================
      MAIN CONTENT
@@ -139,17 +132,14 @@
     {% block content %}{% endblock %}
 </main>
 
-
 <!-- =======================
      FOOTER
 ======================== -->
 <footer id="footer" class="footer">
     <div class="footer-container">
-
         <div class="footer-col">
             <h3 class="footer-logo">
                 <img src="{{ url_for('static', filename='images/logo.png') }}" alt="HireNext Logo">
-
                 <span class="brand-text">
                     <span class="brand-black">HireNext</span><span class="dot">.ai</span>
                 </span>
@@ -164,7 +154,7 @@
             <h4>Platform</h4>
             <ul>
                 <li><a href="/dashboard">Dashboard</a></li>
-                <li><a href="/jobs/">Job Management</a></li>
+                <li><a href="{{ url_for('job_bp.list_jobs_page') }}">Job Management</a></li>
                 <li><a href="/screening/new">Resume Screening</a></li>
                 <li><a href="/interview/calander">Calendar</a></li>
                 <li><a href="/interview/schedule">Interview Scheduling</a></li>
@@ -190,7 +180,6 @@
                 <li><a href="#">Compliance</a></li>
             </ul>
         </div>
-
     </div>
 
     <div class="footer-bottom">
@@ -206,7 +195,10 @@
     </div>
 </footer>
 
-<!-- ✅ ONE global layout script for sidebar toggle -->
+<!-- SweetAlert2 (global) -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- Global layout script -->
 <script defer src="{{ url_for('static', filename='js/layout.js') }}"></script>
 
 {% block extra_js %}{% endblock %}

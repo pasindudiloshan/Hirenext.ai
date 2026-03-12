@@ -39,13 +39,15 @@ def serialize_job(job: dict) -> dict:
     """Convert Mongo _id to string for JSON responses."""
     if not job:
         return job
+
     job = dict(job)
-    job["_id"] = str(job.get("_id"))
+    if "_id" in job:
+        job["_id"] = str(job["_id"])
     return job
 
 
 # =====================================================
-# 🟦 DASHBOARD (MOVED TO /dashboard)
+# 🟦 DASHBOARD
 # =====================================================
 @job_bp.route("/dashboard", methods=["GET"])
 def dashboard_page():
@@ -67,10 +69,6 @@ def list_jobs_page():
 # =====================================================
 @job_bp.route("/jobs/new", methods=["GET"])
 def create_job_form():
-    """
-    Render create job form.
-    IMPORTANT: Pass ALL_SKILLS (flattened list)
-    """
     return render_template(
         "jobs/create_job.html",
         skill_library=ALL_SKILLS
@@ -82,12 +80,9 @@ def create_job_form():
 # =====================================================
 @job_bp.route("/jobs/new", methods=["POST"])
 def create_job_submit():
-    """
-    Handle job creation form submission with optional image upload.
-    """
     image_path = ""
 
-    # 1️⃣ Handle image upload
+    # 1. Handle image upload
     file = request.files.get("job_image")
 
     if file and file.filename:
@@ -108,12 +103,10 @@ def create_job_submit():
             "jobs"
         )
 
-        # Create folder if not exists
         os.makedirs(upload_folder, exist_ok=True)
-
         save_path = os.path.join(upload_folder, filename)
 
-        # Prevent overwrite (auto rename if exists)
+        # Prevent overwrite
         if os.path.exists(save_path):
             name, ext = os.path.splitext(filename)
             counter = 1
@@ -124,10 +117,10 @@ def create_job_submit():
 
         file.save(save_path)
 
-        # Path to store in MongoDB
+        # Store relative path in MongoDB
         image_path = f"uploads/jobs/{filename}"
 
-    # 2️⃣ Create job using service (pass image_path)
+    # 2. Create job using service
     success, message = JobService.create_job_from_form(
         request.form,
         image_path=image_path
@@ -158,9 +151,39 @@ def view_job(job_id):
 
 
 # =====================================================
-# 🟦 OPTIONAL: JSON API
+# 🟦 JSON API - GET ALL JOBS / SEARCH BY TITLE
 # =====================================================
 @job_bp.route("/api/jobs", methods=["GET"])
 def list_jobs_api():
-    jobs = JobModel.get_all()
+    """
+    JSON API for Postman / frontend fetch.
+    Supports:
+    - GET /api/jobs
+    - GET /api/jobs?job_title=Senior Accountant
+    """
+    job_title = request.args.get("job_title", "").strip()
+
+    if job_title:
+        jobs = JobModel.get_by_title(job_title)
+    else:
+        jobs = JobModel.get_all()
+
     return jsonify([serialize_job(j) for j in jobs]), 200
+
+
+# =====================================================
+# 🟦 JSON API - GET JOB BY ID
+# =====================================================
+@job_bp.route("/api/jobs/<job_id>", methods=["GET"])
+def get_job_api(job_id):
+    """
+    JSON API to get one job by id.
+    Example:
+    GET /api/jobs/699ff7779784313bc4402244
+    """
+    job = JobModel.get_by_id(job_id)
+
+    if not job:
+        return jsonify({"success": False, "message": "Job not found"}), 404
+
+    return jsonify(serialize_job(job)), 200

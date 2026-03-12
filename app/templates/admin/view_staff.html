@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View Staff | HireNext.ai</title>
+
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <link rel="stylesheet"
+        href="{{ url_for('static', filename='css/adduser.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">
+    HireNext<span>.ai</span>
+  </div>
+
+  <div class="top-actions">
+    <a href="{{ url_for('admin_bp.dashboard') }}" class="back-btn">
+      <i class="fa-solid fa-arrow-left"></i>
+      Back Dashboard
+    </a>
+
+    <div class="admin-user">
+      <i class="fa-solid fa-user"></i>
+      {{ admin_username or "Admin" }}
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="form-card">
+    <h2>Staff Details</h2>
+    <p>View staff member information</p>
+
+    <div class="grid">
+      <div class="input-group">
+        <label>Staff Code</label>
+        <input type="text" value="{{ staff.staff_code }}" readonly>
+      </div>
+
+      <div class="input-group">
+        <label>Full Name</label>
+        <input type="text" value="{{ staff.full_name }}" readonly>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="input-group">
+        <label>Role</label>
+        <input type="text" value="{{ staff.role }}" readonly>
+      </div>
+
+      <div class="input-group">
+        <label>Email</label>
+        <input type="text" value="{{ staff.email }}" readonly>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="input-group">
+        <label>Organization</label>
+        <input type="text" value="{{ staff.organization }}" readonly>
+      </div>
+
+      <div class="input-group">
+        <label>Status</label>
+        <input type="text" value="{{ staff.status }}" readonly>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="input-group">
+        <label>Last Active</label>
+        <input type="text" value="{{ staff.last_active }}" readonly>
+      </div>
+
+      <div class="input-group">
+        <label>Created At</label>
+        <input type="text" value="{{ staff.created_at }}" readonly>
+      </div>
+    </div>
+
+    <div class="actions">
+      <a href="{{ url_for('admin_bp.edit_staff_page', staff_id=staff.id) }}" class="btn-primary">
+        <i class="fa-solid fa-pen"></i>
+        Edit Staff
+      </a>
+
+      <a href="{{ url_for('admin_bp.dashboard') }}" class="btn-outline">
+        Back
+      </a>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>

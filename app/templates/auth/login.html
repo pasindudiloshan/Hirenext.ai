@@ -1,12 +1,11 @@
 <div class="auth-card popup-card">
 
-  <!-- Logo / Header -->
   <div class="auth-header">
     <div class="auth-logo">
       <span class="logo-icon">H</span>
     </div>
-    <h2 class="auth-title">Sign In</h2>
-    <p class="auth-sub">Welcome back! Please login to continue.</p>
+    <h2 class="auth-title">{{ login_title or 'Sign In' }}</h2>
+    <p class="auth-sub">{{ login_subtitle or 'Welcome back! Please login to continue.' }}</p>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -19,35 +18,32 @@
     {% endif %}
   {% endwith %}
 
-  <!-- Form -->
-  <form method="POST" action="/auth/login" class="auth-form">
+  <form method="POST" action="{{ login_action or url_for('auth_bp.login_submit') }}" class="auth-form">
 
-    <!-- Email -->
     <div class="form-group">
       <label>Email Address</label>
-      <input 
-        type="email" 
-        name="email" 
-        required 
+      <input
+        type="email"
+        name="email"
+        required
         placeholder="Enter your email"
         value="{{ email or '' }}"
       />
     </div>
 
-    <!-- Password -->
     <div class="form-group">
       <label>Password</label>
       <div class="pw-row">
-        <input 
-          type="password" 
-          name="password" 
+        <input
+          type="password"
+          name="password"
           id="loginPassword"
-          required 
+          required
           placeholder="Enter your password"
         />
-        <button 
-          type="button" 
-          class="pw-toggle" 
+        <button
+          type="button"
+          class="pw-toggle"
           data-target="loginPassword"
         >
           Show
@@ -55,7 +51,6 @@
       </div>
     </div>
 
-    <!-- Options Row -->
     <div class="auth-options">
       <label class="remember-me">
         <input type="checkbox" name="remember">
@@ -67,19 +62,19 @@
       </a>
     </div>
 
-    <!-- Submit -->
     <button type="submit" class="btn">
-      Sign In
+      {{ 'Admin Sign In' if is_admin_login else 'Sign In' }}
     </button>
 
   </form>
 
-  <!-- Switch -->
+  {% if not is_admin_login %}
   <div class="auth-switch">
     Don’t have an account?
     <a href="#" class="switch-link" data-auth="register">
       Sign Up Now
     </a>
   </div>
+  {% endif %}
 
 </div>

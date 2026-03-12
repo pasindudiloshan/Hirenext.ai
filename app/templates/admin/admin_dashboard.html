@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | HireNext.ai</title>
+
+  <!-- Font Awesome -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+  />
+
+  <!-- Admin Dashboard CSS -->
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/admin_dashboard.css') }}"
+  />
+</head>
+<body class="admin-body">
+
+  <!-- =========================
+       TOP NAVBAR
+  ========================== -->
+  <header class="admin-topbar">
+    <div class="topbar-left">
+      <div class="brand-wrap">
+        <div class="brand-text">
+          <span class="brand-black">HireNext</span><span class="brand-blue">.ai</span>
+        </div>
+      </div>
+
+      <nav class="admin-nav">
+        <a href="{{ url_for('admin_bp.dashboard') }}" class="admin-nav-link active">Dashboard</a>
+        <a href="#staff-section" class="admin-nav-link">Recruiters</a>
+        <a href="#stats-section" class="admin-nav-link">Candidates</a>
+        <a href="#stats-section" class="admin-nav-link">Vacancies</a>
+      </nav>
+    </div>
+
+    <div class="topbar-right">
+      <button class="icon-btn" id="notifyBtn" aria-label="Notifications" type="button">
+        <i class="fa-regular fa-bell"></i>
+        <span class="notify-dot"></span>
+      </button>
+
+      <div class="admin-profile">
+        <div class="admin-avatar">
+          {{ (admin_username or 'A')[0] | upper }}
+        </div>
+
+        <div class="admin-meta">
+          <strong>{{ admin_username or 'Admin' }}</strong>
+          <span>System Owner</span>
+        </div>
+
+        <a href="{{ url_for('admin_bp.logout') }}" class="icon-btn" title="Logout" aria-label="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================
+       MAIN CONTENT
+  ========================== -->
+  <main class="admin-main">
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="section-card">
+          <div class="flash-wrap">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <!-- =========================
+         STAT CARDS
+    ========================== -->
+    <section class="stats-grid" id="stats-section">
+      <div class="stat-card blue">
+        <div class="stat-icon">
+          <i class="fa-solid fa-users"></i>
+        </div>
+        <div class="stat-content">
+          <span>Total Staff</span>
+          <h2 id="totalStaff">{{ stats.total_staff or 0 }}</h2>
+        </div>
+      </div>
+
+      <div class="stat-card purple">
+        <div class="stat-icon">
+          <i class="fa-solid fa-briefcase"></i>
+        </div>
+        <div class="stat-content">
+          <span>Total Vacancies</span>
+          <h2 id="totalVacancies">{{ stats.total_vacancies or 0 }}</h2>
+          <small>{{ stats.total_vacancies or 0 }} active now</small>
+        </div>
+      </div>
+
+      <div class="stat-card green">
+        <div class="stat-icon">
+          <i class="fa-solid fa-building"></i>
+        </div>
+        <div class="stat-content">
+          <span>Registered Organizations</span>
+          <h2 id="totalOrgs">{{ stats.total_orgs or 0 }}</h2>
+        </div>
+      </div>
+
+      <div class="stat-card orange">
+        <div class="stat-icon">
+          <i class="fa-solid fa-user-check"></i>
+        </div>
+        <div class="stat-content">
+          <span>Active Recruiters</span>
+          <h2 id="activeRecruiters">{{ stats.active_recruiters or 0 }}</h2>
+        </div>
+      </div>
+
+      <div class="stat-card teal">
+        <div class="stat-icon">
+          <i class="fa-solid fa-user-group"></i>
+        </div>
+        <div class="stat-content">
+          <span>Total Candidates</span>
+          <h2 id="totalCandidates">{{ stats.total_candidates or 0 }}</h2>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================
+         REGISTERED ORGANIZATIONS
+    ========================== -->
+    <section class="section-card">
+      <div class="section-head">
+        <div>
+          <h3>Registered Organizations</h3>
+          <p class="section-subtext">Current organizations available in the system.</p>
+        </div>
+
+        <button class="btn-outline small-btn" type="button">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          View All
+        </button>
+      </div>
+
+      <div class="org-grid">
+        <article class="org-card">
+          <div class="org-top">
+            <div class="org-logo blue-bg">HCL</div>
+            <span class="pill success">Active</span>
+          </div>
+          <h4>HCL Technologies Lanka (Pvt) Limited</h4>
+        </article>
+      </div>
+    </section>
+
+    <!-- =========================
+         STAFF TABLE
+    ========================== -->
+    <section class="section-card" id="staff-section">
+      <div class="section-head">
+        <div>
+          <h3>Staff Members</h3>
+          <p class="section-subtext">Manage all recruiter and staff accounts.</p>
+        </div>
+
+        <div class="table-tools">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="staffSearch" placeholder="Search staff..." />
+          </div>
+
+          <a href="{{ url_for('admin_bp.add_user_page') }}" class="btn-primary small-btn">
+            <i class="fa-solid fa-user-plus"></i>
+            Add Member
+          </a>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="staff-table">
+          <thead>
+            <tr>
+              <th>Staff Code</th>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Email</th>
+              <th>Organization</th>
+              <th>Status</th>
+              <th>Last Active</th>
+              <th>Created At</th>
+              <th>Updated At</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody id="staffTableBody">
+            {% if staff_list and staff_list|length > 0 %}
+              {% for staff in staff_list %}
+                {% set staff_status = staff.status or 'Active' %}
+                <tr>
+                  <td>{{ staff.staff_code or '-' }}</td>
+                  <td>
+                    <div class="user-cell">
+                      <div class="table-avatar">
+                        {{ (staff.full_name or 'U')[0] | upper }}
+                      </div>
+                      <div>
+                        <strong>{{ staff.full_name or 'Unknown User' }}</strong>
+                        <small>{{ staff.role or 'Staff Member' }}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ staff.role or '-' }}</td>
+                  <td>{{ staff.email or '-' }}</td>
+                  <td>{{ staff.organization or '-' }}</td>
+                  <td>
+                    <span class="pill {{ 'success' if staff_status|lower == 'active' else 'danger' }}">
+                      {{ staff_status }}
+                    </span>
+                  </td>
+                  <td>{{ staff.last_active or 'Never' }}</td>
+                  <td>{{ staff.created_at or '-' }}</td>
+                  <td>{{ staff.updated_at or '-' }}</td>
+                  <td>
+                    <div class="action-group">
+                      <a
+                        href="{{ url_for('admin_bp.edit_staff_page', staff_id=staff.id) }}"
+                        class="action-btn edit"
+                        title="Edit"
+                      >
+                        <i class="fa-solid fa-pen"></i>
+                      </a>
+
+                      <a
+                        href="{{ url_for('admin_bp.view_staff', staff_id=staff.id) }}"
+                        class="action-btn view"
+                        title="View"
+                      >
+                        <i class="fa-solid fa-eye"></i>
+                      </a>
+
+                      <form
+                        method="POST"
+                        action="{{ url_for('admin_bp.toggle_staff_status', staff_id=staff.id) }}"
+                        style="display:inline;"
+                      >
+                        <button
+                          class="action-btn view"
+                          type="submit"
+                          title="{% if staff_status|lower == 'active' %}Suspend{% else %}Activate{% endif %}"
+                        >
+                          <i class="fa-solid fa-user-lock"></i>
+                        </button>
+                      </form>
+
+                      <form
+                        method="POST"
+                        action="{{ url_for('admin_bp.delete_staff', staff_id=staff.id) }}"
+                        style="display:inline;"
+                        onsubmit="return confirm('Are you sure you want to delete this staff member?');"
+                      >
+                        <button class="action-btn delete" type="submit" title="Delete">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="10" style="text-align:center; padding: 24px;">
+                  No staff members found.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/admin_dashboard.js') }}"></script>
+</body>
+</html>

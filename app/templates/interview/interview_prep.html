@@ -3,48 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Waiting Lobby</title>
+  <title>Waiting Lobby | HireNext.ai</title>
 
-  <!-- Font Awesome (CDN) -->
-  <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!-- Font Awesome -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+  />
 
-  <link rel="stylesheet" href="/app/static/css/interview_prep.css" />
+  <!-- External Stylesheet -->
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/interview_prep.css') }}"
+  />
 </head>
 <body>
 
   <div class="lp-overlay" role="dialog" aria-modal="true" aria-label="Waiting lobby">
     <div class="lp-modal">
 
-      <!-- top row (only close button) -->
+      <!-- Top Row -->
       <div class="lp-top">
-        <button class="lp-close" id="btnClose" aria-label="Close">
+        <button class="lp-close" id="btnClose" type="button" aria-label="Close">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
-      <!-- message -->
+      <!-- Header -->
       <div class="lp-header">
         <h1>Someone in the meeting should let you in soon.</h1>
         <p>Choose your audio and video settings</p>
       </div>
 
       <div class="lp-grid">
-        <!-- left: video preview -->
+
+        <!-- Video Preview -->
         <div class="lp-preview">
           <div class="lp-video">
-            <!-- If you want: replace this with a real <video> element later -->
-            <div class="lp-camera-badge" id="camBadge">Camera On</div>
+            <video id="cameraPreview" autoplay playsinline muted></video>
+
+            <div class="lp-camera-badge" id="camBadge">
+              Camera Off
+            </div>
           </div>
 
           <div class="lp-preview-controls">
-            <button class="lp-pill" id="btnCam" type="button" aria-pressed="true">
+            <button class="lp-pill" id="btnCam" type="button">
               <i class="fa-solid fa-video"></i>
               <span>Camera</span>
-              <span class="lp-switch on" id="camSwitch"></span>
+              <span class="lp-switch" id="camSwitch"></span>
             </button>
 
-            <button class="lp-pill" id="btnMic" type="button" aria-pressed="true">
+            <button class="lp-pill" id="btnMic" type="button">
               <i class="fa-solid fa-microphone"></i>
               <span>Mic</span>
               <span class="lp-switch on" id="micSwitch"></span>
@@ -61,9 +71,9 @@
           </label>
         </div>
 
-        <!-- right: audio panel -->
+        <!-- Audio Panel -->
         <div class="lp-panel">
-          <button class="lp-row selected" type="button" data-audio="computer">
+          <button class="lp-row selected" type="button">
             <div class="lp-row-left">
               <i class="fa-solid fa-desktop"></i>
               <div>
@@ -72,61 +82,135 @@
               </div>
             </div>
             <div class="lp-row-right">
-              <span class="lp-check"><i class="fa-solid fa-check"></i></span>
+              <span class="lp-check">
+                <i class="fa-solid fa-check"></i>
+              </span>
             </div>
           </button>
 
           <div class="lp-sliders">
             <div class="lp-slider">
               <i class="fa-solid fa-microphone"></i>
-              <input type="range" min="0" max="100" value="70" id="micVol">
+              <input type="range" min="0" max="100" value="70" />
             </div>
+
             <div class="lp-slider">
               <i class="fa-solid fa-volume-high"></i>
-              <input type="range" min="0" max="100" value="55" id="spkVol">
+              <input type="range" min="0" max="100" value="55" />
             </div>
           </div>
 
-          <button class="lp-row" type="button" data-audio="phone">
+          <button class="lp-row" type="button">
             <div class="lp-row-left">
               <i class="fa-solid fa-phone"></i>
               <div class="lp-row-title">Phone audio</div>
             </div>
-            <div class="lp-row-right">
-              <span class="lp-radio"></span>
-            </div>
           </button>
 
-          <button class="lp-row" type="button" data-audio="room">
+          <button class="lp-row" type="button">
             <div class="lp-row-left">
               <i class="fa-solid fa-building"></i>
               <div class="lp-row-title">Room audio</div>
             </div>
-            <div class="lp-row-right">
-              <span class="lp-radio"></span>
-            </div>
           </button>
 
-          <button class="lp-row" type="button" data-audio="none">
+          <button class="lp-row" type="button">
             <div class="lp-row-left">
               <i class="fa-solid fa-volume-xmark"></i>
-              <div class="lp-row-title">Don’t use audio</div>
-            </div>
-            <div class="lp-row-right">
-              <span class="lp-radio"></span>
+              <div class="lp-row-title">Don't use audio</div>
             </div>
           </button>
 
           <div class="lp-actions">
             <button class="lp-btn ghost" id="btnCancel" type="button">Cancel</button>
-            <button class="lp-btn primary" id="btnJoin" type="button">Join now</button>
+            <button class="lp-btn primary" id="btnJoinNow" type="button">Join now</button>
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   </div>
 
-  <script src="/app/static/js/interview_prep.js"></script>
+  <script>
+    let cameraStream = null;
+    let cameraEnabled = false;
+    let micEnabled = true;
+
+    const btnCam = document.getElementById("btnCam");
+    const btnMic = document.getElementById("btnMic");
+    const btnClose = document.getElementById("btnClose");
+    const btnCancel = document.getElementById("btnCancel");
+    const btnJoinNow = document.getElementById("btnJoinNow");
+
+    const camSwitch = document.getElementById("camSwitch");
+    const micSwitch = document.getElementById("micSwitch");
+    const camBadge = document.getElementById("camBadge");
+    const video = document.getElementById("cameraPreview");
+
+    async function enableCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+
+        video.srcObject = cameraStream;
+        cameraEnabled = true;
+        camSwitch.classList.add("on");
+        camBadge.textContent = "Camera On";
+      } catch (error) {
+        alert("Camera permission denied or unavailable.");
+      }
+    }
+
+    function disableCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+
+      video.srcObject = null;
+      cameraStream = null;
+      cameraEnabled = false;
+      camSwitch.classList.remove("on");
+      camBadge.textContent = "Camera Off";
+    }
+
+    btnCam.addEventListener("click", async function () {
+      if (!cameraEnabled) {
+        await enableCamera();
+      } else {
+        disableCamera();
+      }
+    });
+
+    btnMic.addEventListener("click", function () {
+      micEnabled = !micEnabled;
+
+      if (micEnabled) {
+        micSwitch.classList.add("on");
+      } else {
+        micSwitch.classList.remove("on");
+      }
+    });
+
+    btnClose.addEventListener("click", function () {
+      disableCamera();
+      window.history.back();
+    });
+
+    btnCancel.addEventListener("click", function () {
+      disableCamera();
+      window.history.back();
+    });
+
+    btnJoinNow.addEventListener("click", function () {
+      alert("Ready to join the interview.");
+    });
+
+    window.addEventListener("beforeunload", function () {
+      disableCamera();
+    });
+  </script>
+
 </body>
 </html>

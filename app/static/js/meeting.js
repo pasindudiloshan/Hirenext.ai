@@ -11,7 +11,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = {
     statusPill: document.getElementById("statusPill"),
     metaLine: document.getElementById("metaLine"),
-    alert: document.getElementById("formAlert"),
 
     form: document.getElementById("meetingForm"),
     btnSave: document.getElementById("btnSave"),
@@ -40,17 +39,59 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!id || !el.form) return;
 
-  function setAlert(type, msg) {
-    if (!el.alert) return;
-    el.alert.style.display = "block";
-    el.alert.className = "mt-alert " + (type === "ok" ? "ok" : "err");
-    el.alert.textContent = msg || "";
+  function toast(icon, title) {
+    return Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon,
+      title,
+      showConfirmButton: false,
+      timer: 1800,
+      timerProgressBar: true
+    });
   }
 
-  function clearAlert() {
-    if (!el.alert) return;
-    el.alert.style.display = "none";
-    el.alert.textContent = "";
+  function showSuccess(title, text = "") {
+    return Swal.fire({
+      icon: "success",
+      title,
+      text,
+      confirmButtonColor: "#16a34a"
+    });
+  }
+
+  function showError(title, text = "") {
+    return Swal.fire({
+      icon: "error",
+      title,
+      text,
+      confirmButtonColor: "#dc2626"
+    });
+  }
+
+  function showWarning(title, text = "") {
+    return Swal.fire({
+      icon: "warning",
+      title,
+      text,
+      confirmButtonColor: "#2563eb"
+    });
+  }
+
+  function showLoading(title = "Please wait...") {
+    Swal.fire({
+      title,
+      text: "Processing request...",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+  }
+
+  function closeLoading() {
+    Swal.close();
   }
 
   function setPill(status) {
@@ -66,26 +107,26 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  function safeStr(x) { return (x === null || x === undefined) ? "" : String(x); }
+  function safeStr(x) {
+    return (x === null || x === undefined) ? "" : String(x);
+  }
 
   function timeFromLabelOrISO(interview) {
-    // Prefer start_label "HH:MM"
     const lab = safeStr(interview.start_label || "");
     if (lab && /^\d{2}:\d{2}$/.test(lab)) return lab;
 
-    // fallback: parse start_time ISO
     const iso = safeStr(interview.start_time || "");
     if (!iso) return "";
+
     const dt = new Date(iso);
     if (isNaN(dt.getTime())) return "";
+
     const hh = String(dt.getHours()).padStart(2, "0");
     const mm = String(dt.getMinutes()).padStart(2, "0");
     return `${hh}:${mm}`;
   }
 
   function fill(interview) {
-    clearAlert();
-
     setPill(interview.status);
 
     if (el.metaLine) {
@@ -95,11 +136,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // form fields
     el.title.value = safeStr(interview.title || "");
     el.type.value = safeStr(interview.type || "Interview");
-
     el.date.value = safeStr(interview.date || "");
     el.time.value = timeFromLabelOrISO(interview) || "10:00";
 
-    // duration can be stored as duration_min
     const dur = interview.duration_min ?? interview.duration ?? 30;
     el.duration.value = String(Number(dur) || 30);
 
@@ -109,6 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // read-only
     el.candName.textContent = safeStr(interview.candidate_name || "-");
+
     const email = safeStr(interview.candidate_email || "");
     el.candEmail.textContent = email || "-";
     el.candEmail.href = email ? `mailto:${email}` : "#";
@@ -120,28 +160,37 @@ document.addEventListener("DOMContentLoaded", () => {
     el.startTime.textContent = safeStr(interview.start_time || "-");
     el.endTime.textContent = safeStr(interview.end_time || "-");
 
-    // disable save if cancelled
-    const cancelled = (safeStr(interview.status || "").toUpperCase() === "CANCELLED");
+    const cancelled = safeStr(interview.status || "").toUpperCase() === "CANCELLED";
     el.btnSave.disabled = cancelled;
     el.btnCancel.disabled = cancelled;
   }
 
-  async function fetchInterview() {
-    setAlert("ok", "Loading...");
+  async function fetchInterview(showNotice = false) {
+    showLoading("Loading interview...");
+
     try {
-      const res = await fetch(`/interview/api/interview/${encodeURIComponent(id)}`, { method: "GET" });
+      const res = await fetch(`/interview/api/interview/${encodeURIComponent(id)}`, {
+        method: "GET"
+      });
+
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Failed to load");
+      if (!data.ok) throw new Error(data.error || "Failed to load interview.");
 
       fill(data.interview || {});
-      clearAlert();
+      closeLoading();
+
+      if (showNotice) {
+        toast("success", "Interview reloaded");
+      }
     } catch (e) {
-      setAlert("err", e.message || "Load failed");
+      closeLoading();
+      showError("Load Failed", e.message || "Unable to load interview details.");
     }
   }
 
   async function saveInterview(payload) {
-    setAlert("ok", "Saving...");
+    showLoading("Saving changes...");
+
     try {
       const res = await fetch(`/interview/api/interview/${encodeURIComponent(id)}/update`, {
         method: "POST",
@@ -150,26 +199,38 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Save failed");
+      if (!data.ok) throw new Error(data.error || "Save failed.");
 
-      // Refresh view using returned interview if present, otherwise refetch
       if (data.interview) {
         fill(data.interview);
       } else {
-        await fetchInterview();
+        await fetchInterview(false);
       }
-      setAlert("ok", "Saved ✅");
-      setTimeout(clearAlert, 1200);
+
+      closeLoading();
+      toast("success", "Interview updated successfully");
     } catch (e) {
-      setAlert("err", e.message || "Save failed");
+      closeLoading();
+      showError("Save Failed", e.message || "Unable to save interview changes.");
     }
   }
 
   async function cancelInterview() {
-    const yes = window.confirm("Cancel this interview? This will mark it as CANCELLED.");
-    if (!yes) return;
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Cancel Interview?",
+      text: "This will mark the interview as CANCELLED.",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, cancel it",
+      cancelButtonText: "Keep it"
+    });
 
-    setAlert("ok", "Cancelling...");
+    if (!result.isConfirmed) return;
+
+    showLoading("Cancelling interview...");
+
     try {
       const res = await fetch(`/interview/api/interview/${encodeURIComponent(id)}/cancel`, {
         method: "POST",
@@ -178,41 +239,41 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Cancel failed");
+      if (!data.ok) throw new Error(data.error || "Cancel failed.");
 
       if (data.interview) fill(data.interview);
-      setAlert("ok", "Cancelled ✅");
-      setTimeout(clearAlert, 1400);
+
+      closeLoading();
+      await showSuccess("Interview Cancelled", "The interview has been marked as cancelled.");
     } catch (e) {
-      setAlert("err", e.message || "Cancel failed");
+      closeLoading();
+      showError("Cancel Failed", e.message || "Unable to cancel this interview.");
     }
   }
 
-  // Bind
   el.form.addEventListener("submit", (e) => {
     e.preventDefault();
-    clearAlert();
 
     const date = el.date.value.trim();
     const time = el.time.value.trim();
     const duration = Number(el.duration.value || 30);
 
     if (!date || !time) {
-      setAlert("err", "Date and Time are required.");
-      return;
-    }
-    if (!Number.isFinite(duration) || duration < 5) {
-      setAlert("err", "Duration must be at least 5 minutes.");
+      showWarning("Missing Required Fields", "Date and time are required.");
       return;
     }
 
-    // payload uses controller allowed fields:
+    if (!Number.isFinite(duration) || duration < 5) {
+      showWarning("Invalid Duration", "Duration must be at least 5 minutes.");
+      return;
+    }
+
     const payload = {
       title: el.title.value.trim(),
       type: el.type.value,
       date,
-      time,              // service will recompute labels + ISO using time+duration
-      duration,          // maps to duration_min
+      time,
+      duration,
       status: el.status.value,
       meeting_link: el.meeting_link.value.trim(),
       notes: el.notes.value.trim(),
@@ -221,9 +282,8 @@ document.addEventListener("DOMContentLoaded", () => {
     saveInterview(payload);
   });
 
-  el.btnReload?.addEventListener("click", fetchInterview);
+  el.btnReload?.addEventListener("click", () => fetchInterview(true));
   el.btnCancel?.addEventListener("click", cancelInterview);
 
-  // Init load
-  fetchInterview();
+  fetchInterview(false);
 });

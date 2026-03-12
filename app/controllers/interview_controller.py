@@ -1,4 +1,3 @@
-# app/controllers/interview_controller.py  ✅ FULLY UPDATED (without removing anything)
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -15,12 +14,12 @@ from flask import (
     render_template,
     request,
     url_for,
-    redirect,   # ✅ NEW (safe)
+    redirect,
 )
 
 from app.models.shortlisted_batch_model import ShortlistedBatchModel
 from app.services.interview_service import InterviewService
-from app.services.question_bank_service import QuestionBankService  # ✅ NEW
+from app.services.question_bank_service import QuestionBankService
 
 interview_bp = Blueprint("interview_bp", __name__)
 
@@ -79,15 +78,156 @@ def _remaining(shortlisted_count: int, interviews_scheduled: int) -> int:
         return 0
 
 
-# ✅ Optional: normalize job titles so they match JSON role keys more often
 def _normalize_role(role: str) -> str:
     role = (role or "").strip()
-    # common suffixes you might store in DB
     for suffix in ("(Remote)", "(Onsite)", "(Hybrid)"):
         role = role.replace(suffix, "")
-    # common separators
     role = role.split(" - ")[0].strip()
     return role
+
+
+def _build_interview_email_content(
+    candidate_name: str,
+    job_role: str,
+    meeting_date: str,
+    meeting_time: str,
+    meeting_link: str,
+    company_name: str = "HireNext.ai",
+    support_email: str = "support@hirenext.ai",
+) -> tuple[str, str, str]:
+    """
+    Returns: (subject, text_body, html_body)
+    """
+    candidate_name = candidate_name or "Candidate"
+    job_role = job_role or "the selected role"
+    meeting_time = meeting_time or "As scheduled"
+
+    subject = f"Interview Invitation – {job_role} at {company_name}"
+
+    text_body = f"""Dear {candidate_name},
+
+Congratulations!
+
+We are pleased to inform you that you have been shortlisted for the next stage of the hiring process for the position of {job_role} at {company_name}.
+
+Your interview has been scheduled with the details below:
+
+Interview Details
+-------------------------
+Date: {meeting_date}
+Time: {meeting_time}
+Meeting Link: {meeting_link}
+Platform: Online Video Interview
+Duration: Approximately 10–15 minutes
+
+Please join the meeting a few minutes before the scheduled time and ensure that your internet connection, camera, and microphone are working properly.
+
+During the interview, you may be asked questions related to your experience, skills, and problem-solving abilities. We encourage you to answer clearly and confidently.
+
+If you face any issues joining the meeting or need to reschedule, please contact us at:
+{support_email}
+
+We look forward to speaking with you and learning more about your experience.
+
+Best regards,
+Hiring Team
+{company_name}
+"""
+
+    html_body = f"""
+    <html>
+      <body style="margin:0; padding:0; background-color:#f5f7fb; font-family:Arial, Helvetica, sans-serif; color:#1f2937;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f5f7fb; padding:24px 0;">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px; width:100%; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+                <tr>
+                  <td style="background:linear-gradient(135deg,#ff7a18,#ff9f43); padding:28px 32px; color:#ffffff;">
+                    <h1 style="margin:0; font-size:26px; line-height:1.3;">Interview Invitation</h1>
+                    <p style="margin:8px 0 0; font-size:15px; opacity:0.95;">{company_name}</p>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:32px;">
+                    <p style="margin:0 0 16px; font-size:16px;">Dear <strong>{candidate_name}</strong>,</p>
+
+                    <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
+                      Congratulations! We are pleased to inform you that you have been shortlisted for the next stage
+                      of the hiring process for the position of <strong>{job_role}</strong> at <strong>{company_name}</strong>.
+                    </p>
+
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+                      <tr>
+                        <td colspan="2" style="background:#fff7ed; padding:14px 18px; border-bottom:1px solid #e5e7eb;">
+                          <strong style="font-size:16px; color:#9a3412;">Interview Details</strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 18px; width:160px; border-bottom:1px solid #e5e7eb;"><strong>Date</strong></td>
+                        <td style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">{meeting_date}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 18px; width:160px; border-bottom:1px solid #e5e7eb;"><strong>Time</strong></td>
+                        <td style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">{meeting_time}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 18px; width:160px; border-bottom:1px solid #e5e7eb;"><strong>Platform</strong></td>
+                        <td style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">Online Video Interview</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 18px; width:160px; border-bottom:1px solid #e5e7eb;"><strong>Duration</strong></td>
+                        <td style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">Approximately 10–15 minutes</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 18px; width:160px;"><strong>Meeting Link</strong></td>
+                        <td style="padding:12px 18px;">
+                          <a href="{meeting_link}" style="color:#ea580c; text-decoration:none; word-break:break-all;">{meeting_link}</a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:0 0 14px; font-size:15px; line-height:1.7;">
+                      Please join the meeting a few minutes before the scheduled time and make sure your internet
+                      connection, camera, and microphone are working properly.
+                    </p>
+
+                    <p style="margin:0 0 14px; font-size:15px; line-height:1.7;">
+                      During the interview, you may be asked questions related to your experience, skills, and
+                      problem-solving abilities. We encourage you to answer clearly and confidently.
+                    </p>
+
+                    <p style="margin:0 0 24px; font-size:15px; line-height:1.7;">
+                      If you face any issues joining the meeting or need to reschedule, please contact us at
+                      <a href="mailto:{support_email}" style="color:#ea580c; text-decoration:none;">{support_email}</a>.
+                    </p>
+
+                    <p style="margin:0; font-size:15px; line-height:1.7;">
+                      We look forward to speaking with you and learning more about your experience.
+                    </p>
+
+                    <p style="margin:24px 0 0; font-size:15px; line-height:1.7;">
+                      Best regards,<br>
+                      <strong>Hiring Team</strong><br>
+                      {company_name}
+                    </p>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:18px 32px; background:#f9fafb; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280; text-align:center;">
+                    This is an automated interview invitation from {company_name}.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
+
+    return subject, text_body, html_body
 
 
 # ============================================================
@@ -103,7 +243,7 @@ def calander_page():
     now = datetime.now(timezone.utc)
     date_from = (request.args.get("from") or "").strip()
     date_to = (request.args.get("to") or "").strip()
-    batch_id = (request.args.get("batch_id") or "").strip()  # optional
+    batch_id = (request.args.get("batch_id") or "").strip()
 
     if date_from and date_to:
         start = date_from
@@ -149,7 +289,6 @@ def schedule_page():
 
     selected_date_iso = (request.args.get("date") or "").strip()
 
-    # Right side: upcoming interviews for batch
     recent_interviews: List[Dict[str, Any]] = []
     total_scheduled_for_active_batch = 0
 
@@ -157,12 +296,10 @@ def schedule_page():
         if active_batch and active_batch.get("_id"):
             bid = str(active_batch["_id"])
 
-            # total interviews scheduled for this batch (all dates)
             total_scheduled_for_active_batch = int(
                 db.interviews.count_documents({"batch_id": bid}) or 0
             )
 
-            # recent upcoming (for right pane)
             today = _iso_date(datetime.now(timezone.utc))
             future = _iso_date(datetime.now(timezone.utc) + timedelta(days=60))
             recent_interviews = list(
@@ -178,7 +315,6 @@ def schedule_page():
 
     remaining_to_schedule = _remaining(total_shortlisted, total_scheduled_for_active_batch)
 
-    # Add counts per batch for left rail
     try:
         counts: Dict[str, int] = {}
         ids = [str(b["_id"]) for b in batches if b.get("_id")]
@@ -226,7 +362,7 @@ def schedule_page():
         meeting_link=meeting_link,
         selected_date_iso=selected_date_iso,
         selected_date_label=selected_date_label,
-        time_slots=[],  # JS renders slots
+        time_slots=[],
     )
 
 
@@ -242,8 +378,7 @@ def meeting_page(interview_id: str):
 
 
 # ============================================================
-# ✅ NEW: Interview Preview Page (Middle page before interview.html)
-# Template: templates/interview/interview_Q.html
+# Interview Preview Page
 # ============================================================
 
 @interview_bp.route("/interview_Q/<interview_id>", methods=["GET"])
@@ -256,10 +391,8 @@ def interview_preview_page(interview_id: str):
     db = _get_db()
     oid = _oid(interview_id)
 
-    # Where preview will redirect after countdown:
     redirect_url = url_for("interview_bp.live_interview_page", interview_id=str(interview_id))
 
-    # Defaults (safe)
     role = ""
     questions: List[str] = []
     topics: List[str] = []
@@ -269,10 +402,8 @@ def interview_preview_page(interview_id: str):
         role_raw = (row.get("job_title") or row.get("role") or "").strip()
         role = _normalize_role(role_raw)
 
-        # Load questions from question_bank (Mongo)
         q_full = (QuestionBankService.get_questions_for_role(role) if role else [])[:5]
 
-        # Convert to list[str] for the preview page
         for q in (q_full or []):
             if isinstance(q, dict):
                 qtext = str(q.get("question") or "").strip()
@@ -283,11 +414,9 @@ def interview_preview_page(interview_id: str):
                 if skill:
                     topics.append(skill)
 
-    # clean topics unique (preserve order)
     seen = set()
     topics = [t for t in topics if not (t.lower() in seen or seen.add(t.lower()))]
 
-    # If no questions loaded, show safe placeholders
     if not questions:
         questions = [
             "Preparing your questions…",
@@ -297,9 +426,8 @@ def interview_preview_page(interview_id: str):
         if not topics:
             topics = ["General"]
 
-    # UI timing controls
-    show_each_ms = 1800   # 1.8 seconds per question
-    countdown_sec = 3     # 3..2..1
+    show_each_ms = 1800
+    countdown_sec = 3
 
     return render_template(
         "interview/interview_Q.html",
@@ -314,7 +442,7 @@ def interview_preview_page(interview_id: str):
 
 
 # ============================================================
-# ✅ UPDATED: Live Interview Session Page (Option A/B injection)
+# Live Interview Session Page
 # ============================================================
 
 @interview_bp.route("/interview/<interview_id>", methods=["GET"])
@@ -332,7 +460,6 @@ def live_interview_page(interview_id: str):
     results_url = url_for("interview_ai_bp.results", interview_id=str(interview_id))
 
     if not oid:
-        # show page anyway but safe fallback
         return render_template(
             "interview/interview.html",
             interview_id=str(interview_id),
@@ -353,11 +480,9 @@ def live_interview_page(interview_id: str):
         or "Candidate"
     )
 
-    # ✅ role from scheduled interview document
     role_raw = (row.get("job_title") or row.get("role") or "").strip()
     role = _normalize_role(role_raw)
 
-    # ✅ load question list for role
     questions_full = (QuestionBankService.get_questions_for_role(role) if role else [])[:5]
     questions: List[Dict[str, Any]] = []
     for q in (questions_full or []):
@@ -369,8 +494,6 @@ def live_interview_page(interview_id: str):
                 "question": q.get("question", ""),
             })
 
-    # ✅ create attempt doc if missing (session_id == interview_id)
-    # ✅ UPDATED: use UPSERT (safe with unique index on session_id)
     try:
         db.interview_attempts.update_one(
             {"session_id": str(interview_id)},
@@ -391,7 +514,6 @@ def live_interview_page(interview_id: str):
             upsert=True
         )
     except Exception:
-        # don't break the page if attempt creation fails
         pass
 
     return render_template(
@@ -451,7 +573,6 @@ def api_day_slots():
     db = _get_db()
     meeting_link = batch.get("meeting_link_default") or ""
 
-    # remaining-to-schedule (server computed)
     total_shortlisted = len((batch.get("shortlisted_candidates") or []))
     interviews_scheduled = int(db.interviews.count_documents({"batch_id": str(batch_id)}) or 0)
     remaining_to_schedule = _remaining(total_shortlisted, interviews_scheduled)
@@ -634,6 +755,10 @@ def send_manual_email():
     meeting_link = (request.form.get("meeting_link") or "").strip()
     meeting_date = (request.form.get("meeting_date") or "").strip()
 
+    candidate_name = (request.form.get("candidate_name") or "Candidate").strip()
+    job_role = (request.form.get("job_role") or "Interview Role").strip()
+    meeting_time = (request.form.get("meeting_time") or "As scheduled").strip()
+
     if not to_email or not meeting_link or not meeting_date:
         return render_template(
             "interview/mail.html",
@@ -658,20 +783,25 @@ def send_manual_email():
             to_email=to_email
         ), 500
 
-    subject = "Interview Shortlisted - Meeting Details"
-    body = (
-        "Hi,\n\n"
-        "You have been shortlisted for an interview.\n\n"
-        f"Meeting Date: {meeting_date}\n"
-        f"Meeting Link: {meeting_link}\n\n"
-        "Thanks,\nHireNext.ai"
+    company_name = current_app.config.get("COMPANY_NAME", "HireNext.ai")
+    support_email = current_app.config.get("SUPPORT_EMAIL", "support@hirenext.ai")
+
+    subject, text_body, html_body = _build_interview_email_content(
+        candidate_name=candidate_name,
+        job_role=job_role,
+        meeting_date=meeting_date,
+        meeting_time=meeting_time,
+        meeting_link=meeting_link,
+        company_name=company_name,
+        support_email=support_email,
     )
 
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = from_email
     msg["To"] = to_email
-    msg.set_content(body)
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
 
     try:
         with smtplib.SMTP(smtp_host, smtp_port) as server:
@@ -767,4 +897,8 @@ def api_cancel_interview(interview_id: str):
     if not result.get("ok"):
         return jsonify({"ok": False, "error": result.get("error", "Cancel failed")}), 400
 
-    return jsonify({"ok": True, "message": "Interview cancelled.", "interview": _json_safe(result.get("interview"))})
+    return jsonify({
+        "ok": True,
+        "message": "Interview cancelled.",
+        "interview": _json_safe(result.get("interview"))
+    })

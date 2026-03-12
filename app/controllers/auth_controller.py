@@ -4,12 +4,12 @@ from flask import (
     request,
     redirect,
     url_for,
-    flash
+    flash,
+    session
 )
 
-# If you have a UserModel or AuthService, you can import it here
-# from app.models.user_model import UserModel
-# from app.services.auth_service import AuthService
+from app.services.admin_service import AdminService
+from app.services.auth_service import AuthService
 
 
 # --------------------------------------------------
@@ -23,44 +23,108 @@ auth_bp = Blueprint(
 
 
 # ==================================================
-# LOGIN (GET)
-# Used by modal fetch: /auth/login
+# LOGIN PAGE (GET)
 # ==================================================
 @auth_bp.route("/login", methods=["GET"])
 def login_page():
-    return render_template("auth/login.html")
+    return render_template(
+        "auth/login.html",
+        login_action=url_for("auth_bp.login_submit"),
+        login_title="Sign In",
+        login_subtitle="Welcome back! Please login to continue.",
+        is_admin_login=False
+    )
 
 
 # ==================================================
-# LOGIN (POST)
+# LOGIN SUBMIT (POST)
 # ==================================================
 @auth_bp.route("/login", methods=["POST"])
 def login_submit():
-
     email = request.form.get("email", "").strip()
     password = request.form.get("password", "").strip()
 
-    # Basic validation
     if not email or not password:
-        flash("Email and password are required.", "danger")
-        return render_template("auth/login.html", email=email)
+        flash("Email and password are required.", "error")
+        return render_template(
+            "auth/login.html",
+            email=email,
+            login_action=url_for("auth_bp.login_submit"),
+            login_title="Sign In",
+            login_subtitle="Welcome back! Please login to continue.",
+            is_admin_login=False
+        )
 
-    # 🔹 Replace this with real authentication later
-    # Example:
-    # user = UserModel.authenticate(email, password)
-    # if not user:
-    #     flash("Invalid credentials.", "danger")
-    #     return render_template("auth/login.html", email=email)
+    # ----------------------------------------------
+    # 1. Try Admin Login
+    # ----------------------------------------------
+    admin = AdminService.verify_admin_login(email, password)
 
-    flash("Login successful!", "success")
+    if admin:
+        session.clear()
+        session["user_id"] = admin.get("id")
+        session["user_name"] = admin.get("username")
+        session["user_email"] = admin.get("email")
+        session["role"] = "admin"
 
-    # After login → go to dashboard
-    return redirect(url_for("job_bp.dashboard_page"))
+        session["admin_id"] = admin.get("id")
+        session["admin_username"] = admin.get("username")
+        session["admin_role"] = admin.get("role", "admin")
+
+        flash("Admin login successful.", "success")
+        return redirect(url_for("admin_bp.dashboard"))
+
+    # ----------------------------------------------
+    # 2. Try Staff Login
+    # ----------------------------------------------
+    staff = AuthService.login_staff(email, password)
+
+    if staff:
+        session.clear()
+        session["user_id"] = staff.get("id")
+        session["user_name"] = staff.get("full_name")
+        session["user_email"] = staff.get("email")
+        session["role"] = "staff"
+
+        session["staff_id"] = staff.get("id")
+        session["staff_name"] = staff.get("full_name")
+        session["staff_role"] = staff.get("role", "staff")
+        session["staff_organization"] = staff.get("organization", "")
+
+        flash("Login successful.", "success")
+        return redirect(url_for("job_bp.dashboard_page"))
+
+    # ----------------------------------------------
+    # 3. Try Candidate Login
+    # ----------------------------------------------
+    candidate = AuthService.login_candidate(email, password)
+
+    if candidate:
+        session.clear()
+        session["user_id"] = candidate.get("id")
+        session["user_name"] = candidate.get("full_name")
+        session["user_email"] = candidate.get("email")
+        session["role"] = "candidate"
+
+        session["candidate_id"] = candidate.get("id")
+        session["candidate_name"] = candidate.get("full_name")
+
+        flash("Login successful.", "success")
+        return render_template("interview/interview_prep.html")
+
+    flash("Invalid email or password.", "error")
+    return render_template(
+        "auth/login.html",
+        email=email,
+        login_action=url_for("auth_bp.login_submit"),
+        login_title="Sign In",
+        login_subtitle="Welcome back! Please login to continue.",
+        is_admin_login=False
+    )
 
 
 # ==================================================
-# REGISTER (GET)
-# Used by modal fetch: /auth/register
+# REGISTER PAGE (GET)
 # ==================================================
 @auth_bp.route("/register", methods=["GET"])
 def register_page():
@@ -68,38 +132,45 @@ def register_page():
 
 
 # ==================================================
-# REGISTER (POST)
+# REGISTER SUBMIT (POST)
 # ==================================================
 @auth_bp.route("/register", methods=["POST"])
 def register_submit():
-
     name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip()
     password = request.form.get("password", "").strip()
 
     if not name or not email or not password:
-        flash("All fields are required.", "danger")
+        flash("All fields are required.", "error")
         return render_template(
             "auth/register.html",
             name=name,
             email=email
         )
 
-    if len(password) < 8:
-        flash("Password must be at least 8 characters.", "danger")
-        return render_template(
-            "auth/register.html",
-            name=name,
-            email=email
-        )
+    success, message = AuthService.register_candidate(
+        full_name=name,
+        email=email,
+        password=password
+    )
 
-    # 🔹 Replace this with real DB save later
-    # Example:
-    # success, message = AuthService.register_user(name, email, password)
-    # if not success:
-    #     flash(message, "danger")
-    #     return render_template("auth/register.html", name=name, email=email)
+    flash(message, "success" if success else "error")
 
-    flash("Registration successful! Please login.", "success")
+    if success:
+        return redirect(url_for("auth_bp.login_page"))
 
-    return redirect(url_for("auth_bp.login_page"))
+    return render_template(
+        "auth/register.html",
+        name=name,
+        email=email
+    )
+
+
+# ==================================================
+# LOGOUT
+# ==================================================
+@auth_bp.route("/logout", methods=["GET"])
+def logout():
+    session.clear()
+    flash("Logged out successfully.", "success")
+    return redirect("/")

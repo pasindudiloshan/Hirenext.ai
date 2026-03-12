@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Add Staff | HireNext.ai</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+<link rel="stylesheet"
+href="{{ url_for('static', filename='css/adduser.css') }}">
+</head>
+
+<body>
+
+<header class="topbar">
+
+<div class="logo">
+HireNext<span>.ai</span>
+</div>
+
+<div class="top-actions">
+
+<a href="{{ url_for('admin_bp.dashboard') }}" class="back-btn">
+<i class="fa-solid fa-arrow-left"></i>
+Back Dashboard
+</a>
+
+<div class="admin-user">
+<i class="fa-solid fa-user"></i>
+{{ admin_username or "Admin" }}
+</div>
+
+</div>
+
+</header>
+
+
+<main class="container">
+
+<div class="form-card">
+
+<h2>Add Staff Member</h2>
+<p>Create recruiter or staff account</p>
+
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-box">
+
+{% for category,message in messages %}
+<div class="flash {{category}}">
+{{message}}
+</div>
+{% endfor %}
+
+</div>
+{% endif %}
+{% endwith %}
+
+
+<form method="POST"
+action="{{ url_for('admin_bp.create_staff') }}"
+id="addUserForm">
+
+
+<div class="grid">
+
+<div class="input-group">
+<label>Full Name</label>
+<input type="text" name="full_name" required>
+</div>
+
+<div class="input-group">
+<label>Role</label>
+<input type="text" name="role" required>
+</div>
+
+</div>
+
+
+<div class="grid">
+
+<div class="input-group">
+<label>Email</label>
+<input type="email" name="email" required>
+</div>
+
+<div class="input-group">
+<label>Organization</label>
+<input type="text" name="organization" required>
+</div>
+
+</div>
+
+
+<div class="grid">
+
+<div class="input-group">
+<label>Password</label>
+<input type="password" name="password" required id="passwordField">
+</div>
+
+<div class="input-group">
+<label>Status</label>
+
+<select name="status">
+<option value="Active">Active</option>
+<option value="Suspended">Suspended</option>
+</select>
+
+</div>
+
+</div>
+
+
+<div class="actions">
+
+<button type="submit" class="btn-primary">
+<i class="fa-solid fa-user-plus"></i>
+Create Staff
+</button>
+
+<button type="reset" class="btn-outline">
+Reset
+</button>
+
+</div>
+
+</form>
+
+</div>
+
+</main>
+
+<script src="{{ url_for('static', filename='js/adduser.js') }}"></script>
+
+</body>
+</html>

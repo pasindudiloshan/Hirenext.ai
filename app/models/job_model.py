@@ -10,9 +10,11 @@ class JobModel:
     @staticmethod
     def create(job_data: dict):
         db = current_app.mongo.db
+
         job_data["created_at"] = datetime.utcnow()
         job_data["updated_at"] = datetime.utcnow()
         job_data["is_active"] = True
+
         return db.jobs.insert_one(job_data)
 
     @staticmethod
@@ -29,26 +31,59 @@ class JobModel:
             return None
 
     @staticmethod
+    def get_by_title(title: str):
+        """
+        Search jobs by title using case-insensitive partial match.
+        Example:
+        'accountant' will match 'Senior Accountant'
+        """
+        db = current_app.mongo.db
+
+        if not title:
+            return []
+
+        return list(
+            db.jobs.find({
+                "job_title": {"$regex": title, "$options": "i"}
+            }).sort("created_at", -1)
+        )
+
+    @staticmethod
     def update(job_id: str, update_data: dict):
         db = current_app.mongo.db
-        update_data["updated_at"] = datetime.utcnow()
-        return db.jobs.update_one(
-            {"_id": ObjectId(job_id)},
-            {"$set": update_data}
-        )
+
+        try:
+            update_data["updated_at"] = datetime.utcnow()
+
+            return db.jobs.update_one(
+                {"_id": ObjectId(job_id)},
+                {"$set": update_data}
+            )
+        except Exception:
+            return None
 
     @staticmethod
     def delete(job_id: str):
         db = current_app.mongo.db
-        return db.jobs.delete_one({"_id": ObjectId(job_id)})
+
+        try:
+            return db.jobs.delete_one({"_id": ObjectId(job_id)})
+        except Exception:
+            return None
 
     @staticmethod
     def toggle_active(job_id: str, status: bool):
         db = current_app.mongo.db
-        return db.jobs.update_one(
-            {"_id": ObjectId(job_id)},
-            {"$set": {
-                "is_active": status,
-                "updated_at": datetime.utcnow()
-            }}
-        )
+
+        try:
+            return db.jobs.update_one(
+                {"_id": ObjectId(job_id)},
+                {
+                    "$set": {
+                        "is_active": status,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+        except Exception:
+            return None
